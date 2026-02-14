@@ -174,20 +174,20 @@ $OCC --env FOO --env BAR --no-tailscale --help >/dev/null 2>&1 \
 
 ### Tasks
 
-- [ ] Define the default allowlist array (PRD §5.3)
-- [ ] Implement function `collect_allowlist_envs()`: iterate allowlist, if set on host, append `--env KEY=VALUE` to env array
-- [ ] Implement function `parse_dotenv(filepath)`:
+- [x] Define the default allowlist array (PRD §5.3)
+- [x] Implement function `collect_allowlist_envs()`: iterate allowlist, if set on host, append `--env KEY=VALUE` to env array
+- [x] Implement function `parse_dotenv(filepath)`:
   - Read `.env` from `PROJECT_PATH/.env` if it exists
   - Skip blank lines and lines starting with `#`
   - Extract `KEY=VALUE` pairs (no shell expansion, no multiline)
   - Warn on stderr for malformed lines, continue
   - Append `--env KEY=VALUE` to env array
   - `.env` values override same-name host vars
-- [ ] Implement `--env VAR` handling: read `VAR` from host env, silently skip if unset
-- [ ] Always inject `HOST_UID=$(id -u)` and `HOST_GID=$(id -g)`
-- [ ] Inject `NO_TAILSCALE=1` when `--no-tailscale` is passed
-- [ ] Ensure precedence order: implicit > .env > --env > allowlist (highest to lowest priority, later overrides earlier)
-- [ ] Print the final env array when a debug flag or `OCC_DEBUG=1` is set
+- [x] Implement `--env VAR` handling: read `VAR` from host env, silently skip if unset
+- [x] Always inject `HOST_UID=$(id -u)` and `HOST_GID=$(id -g)`
+- [x] Inject `NO_TAILSCALE=1` when `--no-tailscale` is passed
+- [x] Ensure precedence order: implicit > .env > --env > allowlist (highest to lowest priority, later overrides earlier)
+- [x] Print the final env array when a debug flag or `OCC_DEBUG=1` is set
 
 ### Verification
 

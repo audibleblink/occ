@@ -12,6 +12,24 @@ IMAGE_NAME="occ-workspace:latest"
 CONFIG_DIR="${HOME}/.config/occ"
 OPENCODE_CONFIG_DIR="${HOME}/.config/opencode"
 
+# Default allowlist of environment variables to pass through
+ENV_ALLOWLIST=(
+  TS_AUTHKEY
+  LANG
+  LC_ALL
+  LC_CTYPE
+  EDITOR
+  TERM
+  ANTHROPIC_API_KEY
+  OPENAI_API_KEY
+  OPENROUTER_API_KEY
+  AWS_ACCESS_KEY_ID
+  AWS_SECRET_ACCESS_KEY
+  AWS_SESSION_TOKEN
+  GITHUB_TOKEN
+  GH_TOKEN
+)
+
 # ============================================================================
 # Usage / Help
 # ============================================================================
@@ -176,6 +194,110 @@ rt_image_exists() {
 }
 
 # ============================================================================
+# Environment Variable Handling
+# ============================================================================
+
+# Associative array to collect environment variables (KEY=VALUE format)
+# Using associative array allows later values to override earlier ones
+declare -A ENV_MAP
+
+# collect_allowlist_envs - Collect env vars from the allowlist that are set on host
+collect_allowlist_envs() {
+  for var in "${ENV_ALLOWLIST[@]}"; do
+    if [[ -n "${!var:-}" ]]; then
+      ENV_MAP["$var"]="${!var}"
+    fi
+  done
+}
+
+# collect_env_flags - Collect env vars from --env flags
+# Args: array of variable names passed via --env
+collect_env_flags() {
+  local -a vars=("$@")
+  for var in "${vars[@]}"; do
+    if [[ -n "${!var:-}" ]]; then
+      ENV_MAP["$var"]="${!var}"
+    fi
+    # Silently skip if unset (per spec)
+  done
+}
+
+# parse_dotenv - Parse a .env file and add to ENV_MAP
+# Args: $1 = filepath to .env file
+parse_dotenv() {
+  local filepath="$1"
+  
+  if [[ ! -f "$filepath" ]]; then
+    return 0
+  fi
+  
+  local line_num=0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line_num=$((line_num + 1))
+    
+    # Skip blank lines
+    if [[ -z "$line" ]]; then
+      continue
+    fi
+    
+    # Skip comments
+    if [[ "$line" =~ ^[[:space:]]*# ]]; then
+      continue
+    fi
+    
+    # Parse KEY=VALUE (no shell expansion, no multiline)
+    if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+      local key="${BASH_REMATCH[1]}"
+      local value="${BASH_REMATCH[2]}"
+      ENV_MAP["$key"]="$value"
+    else
+      echo "Warning: Malformed line $line_num in $filepath, skipping: $line" >&2
+    fi
+  done < "$filepath"
+}
+
+# inject_implicit_vars - Add implicit vars (HOST_UID, HOST_GID, NO_TAILSCALE)
+# Args: $1 = true/false for no_tailscale flag
+inject_implicit_vars() {
+  local no_tailscale="$1"
+  
+  # Always inject HOST_UID and HOST_GID
+  ENV_MAP["HOST_UID"]="$(id -u)"
+  ENV_MAP["HOST_GID"]="$(id -g)"
+  
+  # Inject NO_TAILSCALE=1 when --no-tailscale is passed
+  if [[ "$no_tailscale" == true ]]; then
+    ENV_MAP["NO_TAILSCALE"]="1"
+  fi
+}
+
+# build_env_array - Build the final array of -e KEY=VALUE flags for container runtime
+# Returns the array via stdout, one flag per line
+build_env_array() {
+  local -a env_flags=()
+  
+  for key in "${!ENV_MAP[@]}"; do
+    env_flags+=("-e" "${key}=${ENV_MAP[$key]}")
+  done
+  
+  # Output each element
+  for flag in "${env_flags[@]}"; do
+    echo "$flag"
+  done
+}
+
+# debug_print_env - Print env vars when OCC_DEBUG=1
+debug_print_env() {
+  if [[ "${OCC_DEBUG:-}" == "1" ]]; then
+    echo "=== Environment Variables ===" >&2
+    for key in $(echo "${!ENV_MAP[@]}" | tr ' ' '\n' | sort); do
+      echo "  ${key}=${ENV_MAP[$key]}" >&2
+    done
+    echo "=============================" >&2
+  fi
+}
+
+# ============================================================================
 # Subcommands
 # ============================================================================
 
@@ -306,6 +428,35 @@ main() {
     project_path="$(cd "$project_path" && pwd)"
   fi
 
+  # ============================================================================
+  # Collect Environment Variables
+  # ============================================================================
+  
+  # Precedence order (later overrides earlier):
+  # 1. allowlist (lowest)
+  # 2. --env flags
+  # 3. .env file values
+  # 4. implicit vars like HOST_UID, HOST_GID, NO_TAILSCALE (highest)
+  
+  # 1. Collect from allowlist
+  collect_allowlist_envs
+  
+  # 2. Collect from --env flags
+  if [[ ${#env_vars[@]} -gt 0 ]]; then
+    collect_env_flags "${env_vars[@]}"
+  fi
+  
+  # 3. Parse .env file from project path (if project path is set)
+  if [[ -n "$project_path" ]]; then
+    parse_dotenv "$project_path/.env"
+  fi
+  
+  # 4. Inject implicit vars (highest precedence)
+  inject_implicit_vars "$no_tailscale"
+  
+  # Debug print if requested
+  debug_print_env
+  
   # ---- STUB: Actual build/launch would happen here ----
   echo "Would launch container with:"
   echo "  Runtime: $RUNTIME"
