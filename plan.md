@@ -173,7 +173,7 @@ echo "=== Phase 1 PASSED ==="
 
 ### Tasks
 
-- [ ] Implement `config.py` with:
+- [x] Implement `config.py` with:
   - `CONFIG_DIR = Path.home() / ".config" / "occ"`
   - `get_config_path()` function
   - `ensure_config_initialized()` - creates dir and copies defaults if missing
@@ -183,13 +183,13 @@ echo "=== Phase 1 PASSED ==="
   - `save_dockerfile_hash()` - saves current hash to `.dockerfile-hash`
   - `reset_config()` - resets Dockerfile and config.toml to defaults
   - `ConfigModel` dataclass/TypedDict for type-safe config access
-- [ ] Implement path expansion for `~` in mount paths
-- [ ] Implement config validation (check required keys exist)
-- [ ] Add CLI commands in `cli.py`:
+- [x] Implement path expansion for `~` in mount paths
+- [x] Implement config validation (check required keys exist)
+- [x] Add CLI commands in `cli.py`:
   - `occ config` - shows config directory path
   - `occ config reset` - resets to defaults with confirmation prompt
   - `occ config edit` - opens config.toml in `$EDITOR`
-- [ ] Handle missing `$EDITOR` gracefully (suggest vim/nano)
+- [x] Handle missing `$EDITOR` gracefully (suggest vim/nano)
 
 ### Verification Script
 
