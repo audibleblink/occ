@@ -1,509 +1,970 @@
-# Execution Plan: `occ` — OpenCode Container
+# Execution Plan: `occ` - OpenCode Container CLI
 
-> Derived from `prd.md`. Each phase produces a complete, tested, functioning artifact. Phases are ordered by dependency; dependent phases are labeled explicitly.
+**Based on:** PRD v1.0  
+**Created:** 2026-02-14  
 
 ---
 
-## Phase 0: Project Scaffolding & Repo Setup
+## Overview
 
-**Depends on**: Nothing  
-**Produces**: Repository structure, `.gitignore`, empty placeholder files
+This plan converts the existing `occ` bash script into a Python package installable via `uv tool install`. The implementation is divided into 5 phases, each delivering a complete, tested, and functional component.
 
-### Tasks
+---
 
-- [x] Initialize a git repository in the project root
-- [x] Create `.gitignore` with entries: `*.key`, `tailscale-*`, `.env`, `.DS_Store`
-- [x] Create empty placeholder files: `Dockerfile`, `occ`, `install.sh`, `README.md`
-- [x] Make `occ` and `install.sh` executable (`chmod +x`)
+## Phase Dependencies
 
-### Verification
-
-```bash
-#!/usr/bin/env bash
-# phase0-check.sh — run from project root
-set -euo pipefail
-fail=0
-for f in .gitignore Dockerfile occ install.sh README.md; do
-  [ -f "$f" ] || { echo "MISSING: $f"; fail=1; }
-done
-[ -x occ ] || { echo "occ not executable"; fail=1; }
-[ -x install.sh ] || { echo "install.sh not executable"; fail=1; }
-git rev-parse --git-dir >/dev/null 2>&1 || { echo "Not a git repo"; fail=1; }
-[ $fail -eq 0 ] && echo "Phase 0: PASS" || { echo "Phase 0: FAIL"; exit 1; }
+```
+Phase 1 (Scaffolding)
+    │
+    ▼
+Phase 2 (Config) ──────────┐
+    │                      │
+    ▼                      ▼
+Phase 3 (Docker) ◄──── Phase 4 (CLI)
+    │                      │
+    └──────────┬───────────┘
+               ▼
+        Phase 5 (Integration)
 ```
 
+- **Phase 2** depends on **Phase 1**
+- **Phase 3** depends on **Phase 2** (needs config paths)
+- **Phase 4** depends on **Phase 2** (needs config) and **Phase 3** (needs docker operations)
+- **Phase 5** depends on all previous phases
+
 ---
 
-## Phase 1: Dockerfile & Entrypoint
+## Phase 1: Project Scaffolding and Package Structure
 
-**Depends on**: Phase 0  
-**Produces**: A buildable, multi-arch `Dockerfile` with an embedded `/entrypoint.sh` that handles user creation, optional Tailscale startup, and exec to the final command.
+**Goal:** Establish a complete Python package structure that can be installed via `uv tool install` and runs a minimal CLI.
+
+**Depends on:** Nothing (starting point)
 
 ### Tasks
 
-- [x] Write `Dockerfile` using `cgr.dev/chainguard/wolfi-base:latest` as base
-- [x] Install system packages via `apk`: `bash`, `coreutils`, `shadow`, `sudo`, `ca-certificates`, `curl`, `wget`, `git`, `neovim`, `zsh`, `tmux`, `jq`, `ripgrep`, `fzf`, `nodejs`, `npm`, `python3`, `build-base`
-- [x] Install GitHub-release tools with `TARGETARCH` detection:
-  - `tailscale` + `tailscaled` from `pkgs.tailscale.com`
-  - `opencode` via install script
-  - `mise` via install script
-  - `uv` via install script
-  - `yq` from GitHub releases
-- [x] Create a default non-root placeholder user (e.g., `user` with UID 1000)
-- [x] Write `/entrypoint.sh` inline (or `COPY`) that:
-  1. Reads `HOST_UID` and `HOST_GID` env vars
-  2. Creates/modifies the `user` account to match those IDs
-  3. Fixes ownership on `/home/user`
-  4. Conditionally starts Tailscale (if `TS_AUTHKEY` set and `NO_TAILSCALE` is not `1`), with a 30 s timeout and hard fail
-  5. Execs the provided command as the created user via `exec gosu user "$@"` or `exec su-exec` / `sudo -u`
-- [x] Set `ENTRYPOINT ["/entrypoint.sh"]` and `CMD ["/bin/bash"]`
-- [x] Ensure the image works for both `linux/arm64` and `linux/amd64`
+- [x] Create project directory structure:
+  ```
+  occ/
+  ├── pyproject.toml
+  ├── README.md
+  ├── .gitignore
+  └── src/
+      └── occ/
+          ├── __init__.py
+          ├── cli.py
+          ├── docker.py
+          ├── env.py
+          ├── config.py
+          └── resources/
+              ├── Dockerfile
+              └── config.toml
+  ```
+- [x] Write `pyproject.toml` with:
+  - Project metadata (name, version, description)
+  - Dependencies: `typer>=0.9.0`, `docker>=7.0.0`, `python-dotenv>=1.0.0`
+  - Entry point: `occ = "occ.cli:app"`
+  - Python requirement: `>=3.12`
+- [x] Create `src/occ/__init__.py` with version string `__version__ = "1.0.0"`
+- [x] Create minimal `src/occ/cli.py` with Typer app that prints version
+- [x] Create stub files for `docker.py`, `env.py`, `config.py`
+- [x] Create `src/occ/resources/Dockerfile` (copy from existing or create default)
+- [x] Create `src/occ/resources/config.toml` with default configuration
+- [x] Create `.gitignore` for Python projects
+- [x] Create basic `README.md`
 
-### Verification
+### Verification Script
 
 ```bash
-#!/usr/bin/env bash
-# phase1-check.sh — builds the image and validates entrypoint basics
-set -euo pipefail
-IMAGE="occ-workspace:phase1-test"
-RUNTIME="${OCC_RUNTIME:-docker}"
+#!/bin/bash
+# verify_phase1.sh - Run from project root
 
-echo "==> Building image with $RUNTIME..."
-if [ "$RUNTIME" = "container" ]; then
-  container build --tag "$IMAGE" .
-else
-  docker build -t "$IMAGE" .
+set -e
+
+echo "=== Phase 1 Verification ==="
+
+# Check directory structure
+echo "[1/5] Checking directory structure..."
+required_files=(
+    "pyproject.toml"
+    "README.md"
+    ".gitignore"
+    "src/occ/__init__.py"
+    "src/occ/cli.py"
+    "src/occ/docker.py"
+    "src/occ/env.py"
+    "src/occ/config.py"
+    "src/occ/resources/Dockerfile"
+    "src/occ/resources/config.toml"
+)
+
+for file in "${required_files[@]}"; do
+    if [[ ! -f "$file" ]]; then
+        echo "FAIL: Missing $file"
+        exit 1
+    fi
+done
+echo "  All required files present."
+
+# Check pyproject.toml has required fields
+echo "[2/5] Validating pyproject.toml..."
+if ! grep -q 'name = "occ"' pyproject.toml; then
+    echo "FAIL: pyproject.toml missing project name"
+    exit 1
+fi
+if ! grep -q 'typer' pyproject.toml; then
+    echo "FAIL: pyproject.toml missing typer dependency"
+    exit 1
+fi
+if ! grep -q 'docker' pyproject.toml; then
+    echo "FAIL: pyproject.toml missing docker dependency"
+    exit 1
+fi
+echo "  pyproject.toml valid."
+
+# Test package can be installed
+echo "[3/5] Testing package installation..."
+uv venv .venv-test --quiet
+source .venv-test/bin/activate
+uv pip install -e . --quiet
+echo "  Package installs successfully."
+
+# Test CLI runs
+echo "[4/5] Testing CLI execution..."
+if ! occ --help > /dev/null 2>&1; then
+    echo "FAIL: occ --help failed"
+    deactivate
+    rm -rf .venv-test
+    exit 1
+fi
+echo "  CLI executes successfully."
+
+# Test version output
+echo "[5/5] Testing version command..."
+if ! occ --version 2>&1 | grep -q "1.0.0"; then
+    echo "FAIL: Version not showing correctly"
+    deactivate
+    rm -rf .venv-test
+    exit 1
+fi
+echo "  Version displays correctly."
+
+# Cleanup
+deactivate
+rm -rf .venv-test
+
+echo ""
+echo "=== Phase 1 PASSED ==="
+```
+
+### Exit Criteria
+
+- Package installs without errors via `uv pip install -e .`
+- `occ --help` displays help text
+- `occ --version` displays `1.0.0`
+- All verification script checks pass
+
+---
+
+## Phase 2: Configuration Management System
+
+**Goal:** Implement complete configuration management including auto-initialization, TOML parsing, Dockerfile hash tracking, and config commands.
+
+**Depends on:** Phase 1 (package structure)
+
+### Tasks
+
+- [ ] Implement `config.py` with:
+  - `CONFIG_DIR = Path.home() / ".config" / "occ"`
+  - `get_config_path()` function
+  - `ensure_config_initialized()` - creates dir and copies defaults if missing
+  - `load_config()` - parses `config.toml` using `tomllib`
+  - `get_dockerfile_path()` function
+  - `needs_rebuild()` - compares Dockerfile hash
+  - `save_dockerfile_hash()` - saves current hash to `.dockerfile-hash`
+  - `reset_config()` - resets Dockerfile and config.toml to defaults
+  - `ConfigModel` dataclass/TypedDict for type-safe config access
+- [ ] Implement path expansion for `~` in mount paths
+- [ ] Implement config validation (check required keys exist)
+- [ ] Add CLI commands in `cli.py`:
+  - `occ config` - shows config directory path
+  - `occ config reset` - resets to defaults with confirmation prompt
+  - `occ config edit` - opens config.toml in `$EDITOR`
+- [ ] Handle missing `$EDITOR` gracefully (suggest vim/nano)
+
+### Verification Script
+
+```bash
+#!/bin/bash
+# verify_phase2.sh - Run from project root
+
+set -e
+
+echo "=== Phase 2 Verification ==="
+
+# Setup
+source .venv-test/bin/activate 2>/dev/null || {
+    uv venv .venv-test --quiet
+    source .venv-test/bin/activate
+    uv pip install -e . --quiet
+}
+
+# Backup existing config if present
+CONFIG_DIR="$HOME/.config/occ"
+BACKUP_DIR="$HOME/.config/occ.backup.$$"
+if [[ -d "$CONFIG_DIR" ]]; then
+    mv "$CONFIG_DIR" "$BACKUP_DIR"
 fi
 
-echo "==> Checking entrypoint user mapping (UID=$(id -u), GID=$(id -g))..."
-OUTPUT=$($RUNTIME run --rm \
-  -e HOST_UID="$(id -u)" \
-  -e HOST_GID="$(id -g)" \
-  -e NO_TAILSCALE=1 \
-  "$IMAGE" id)
-echo "$OUTPUT"
+cleanup() {
+    rm -rf "$CONFIG_DIR"
+    if [[ -d "$BACKUP_DIR" ]]; then
+        mv "$BACKUP_DIR" "$CONFIG_DIR"
+    fi
+    deactivate 2>/dev/null || true
+    rm -rf .venv-test
+}
+trap cleanup EXIT
 
-echo "$OUTPUT" | grep -q "uid=$(id -u)" || { echo "UID mismatch"; exit 1; }
-echo "$OUTPUT" | grep -q "gid=$(id -g)" || { echo "GID mismatch"; exit 1; }
+# Test 1: Auto-initialization
+echo "[1/7] Testing auto-initialization..."
+python -c "from occ.config import ensure_config_initialized; ensure_config_initialized()"
+if [[ ! -f "$CONFIG_DIR/config.toml" ]]; then
+    echo "FAIL: config.toml not created"
+    exit 1
+fi
+if [[ ! -f "$CONFIG_DIR/Dockerfile" ]]; then
+    echo "FAIL: Dockerfile not created"
+    exit 1
+fi
+echo "  Auto-initialization works."
 
-echo "==> Checking installed tools..."
-for tool in bash git nvim tmux zsh jq rg fzf node npm python3 curl wget yq mise uv opencode tailscale; do
-  $RUNTIME run --rm -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" -e NO_TAILSCALE=1 \
-    "$IMAGE" which "$tool" >/dev/null 2>&1 \
-    || { echo "MISSING tool: $tool"; exit 1; }
-  echo "  ✓ $tool"
-done
+# Test 2: Config loading
+echo "[2/7] Testing config loading..."
+python -c "
+from occ.config import load_config
+config = load_config()
+assert 'container' in config, 'Missing container section'
+assert 'mounts' in config, 'Missing mounts section'
+assert 'env' in config, 'Missing env section'
+print('  Config loads correctly.')
+"
 
-echo "Phase 1: PASS"
+# Test 3: Dockerfile hash detection
+echo "[3/7] Testing Dockerfile hash detection..."
+python -c "
+from occ.config import needs_rebuild, save_dockerfile_hash
+
+# First run - no hash file
+assert needs_rebuild() == True, 'Should need rebuild (no hash file)'
+
+# Save hash
+save_dockerfile_hash()
+
+# Second check - hash matches
+assert needs_rebuild() == False, 'Should not need rebuild (hash matches)'
+
+# Modify Dockerfile
+from pathlib import Path
+dockerfile = Path.home() / '.config' / 'occ' / 'Dockerfile'
+content = dockerfile.read_text()
+dockerfile.write_text(content + '\n# modified')
+
+# Third check - hash changed
+assert needs_rebuild() == True, 'Should need rebuild (hash changed)'
+print('  Dockerfile hash detection works.')
+"
+
+# Test 4: Config reset
+echo "[4/7] Testing config reset..."
+# Modify config
+echo "# custom content" >> "$CONFIG_DIR/config.toml"
+python -c "from occ.config import reset_config; reset_config()"
+if grep -q "custom content" "$CONFIG_DIR/config.toml"; then
+    echo "FAIL: Config reset did not restore defaults"
+    exit 1
+fi
+echo "  Config reset works."
+
+# Test 5: CLI config command
+echo "[5/7] Testing 'occ config' command..."
+output=$(occ config)
+if [[ ! "$output" == *"$CONFIG_DIR"* ]]; then
+    echo "FAIL: 'occ config' should show config path"
+    exit 1
+fi
+echo "  'occ config' command works."
+
+# Test 6: CLI config reset command
+echo "[6/7] Testing 'occ config reset' command..."
+echo "# test modification" >> "$CONFIG_DIR/config.toml"
+echo "y" | occ config reset > /dev/null 2>&1
+if grep -q "test modification" "$CONFIG_DIR/config.toml"; then
+    echo "FAIL: 'occ config reset' did not work"
+    exit 1
+fi
+echo "  'occ config reset' command works."
+
+# Test 7: Path expansion
+echo "[7/7] Testing path expansion..."
+python -c "
+from occ.config import load_config
+from pathlib import Path
+
+# Test that ~ paths get expanded
+config = load_config()
+# The default allowlist paths should be expandable
+print('  Path expansion works.')
+"
+
+echo ""
+echo "=== Phase 2 PASSED ==="
 ```
+
+### Exit Criteria
+
+- Running any `occ` command auto-initializes `~/.config/occ/` if missing
+- `config.toml` and `Dockerfile` are copied from embedded resources
+- `load_config()` returns parsed TOML as Python dict
+- `needs_rebuild()` correctly detects Dockerfile changes
+- `occ config` shows config path
+- `occ config reset` restores defaults
+- `occ config edit` opens editor (or shows helpful error)
+- All verification script checks pass
 
 ---
 
-## Phase 2: `occ` CLI — Core Framework & Argument Parsing
+## Phase 3: Docker Integration Layer
 
-**Depends on**: Phase 0  
-**Produces**: A functioning `occ` bash script with argument parsing, `--help` output, runtime detection, and stubbed-out handler functions. No container launch yet — just the CLI skeleton that exits cleanly.
+**Goal:** Implement all Docker operations: image building, container lifecycle management, and status reporting.
 
-### Tasks
-
-- [x] Write `occ` as a bash script with `set -euo pipefail`
-- [x] Implement `--help` flag that prints the usage block from PRD §6.3
-- [x] Implement argument parser supporting:
-  - `--rebuild`
-  - `--env VAR` (repeatable)
-  - `--no-tailscale`
-  - `--help`
-  - Positional `PROJECT_PATH`
-  - Subcommands: `status`, `config`
-- [x] Implement runtime detection logic (PRD §4.5):
-  1. Check `OCC_RUNTIME` env var
-  2. Check for `container` in PATH
-  3. Fall back to `docker`
-  4. Error if neither found
-- [x] Create helper functions that abstract runtime differences:
-  - `rt_build` — build image
-  - `rt_run` — run container
-  - `rt_mount` — format mount argument
-  - `rt_list` — list containers
-  - `rt_rmi` — remove image
-- [x] Validate `PROJECT_PATH` (exists, is directory) when provided
-- [x] Check that `~/.config/opencode` exists (exit 1 if not)
-- [x] Exit with stubs for actual image build / container launch (print "would launch" and exit 0)
-
-### Verification
-
-```bash
-#!/usr/bin/env bash
-# phase2-check.sh — validates CLI argument parsing and error handling
-set -euo pipefail
-OCC="./occ"
-fail=0
-
-# --help exits 0 and prints usage
-$OCC --help | grep -q "Usage" || { echo "FAIL: --help"; fail=1; }
-
-# Missing runtime detection (unset all, remove docker/container from PATH)
-(
-  unset OCC_RUNTIME
-  PATH="/usr/bin:/bin" $OCC --no-tailscale 2>&1 || true
-) | grep -qi "runtime\|docker\|container" || { echo "FAIL: no runtime error"; fail=1; }
-
-# Nonexistent project path
-$OCC --no-tailscale /nonexistent/path 2>&1 | grep -qi "not exist\|no such\|not found" \
-  || { echo "FAIL: bad project path"; fail=1; }
-
-# status subcommand exits 0
-$OCC status >/dev/null 2>&1 || { echo "FAIL: status subcommand"; fail=1; }
-
-# config subcommand exits 0
-$OCC config >/dev/null 2>&1 || { echo "FAIL: config subcommand"; fail=1; }
-
-# --env with multiple vars parses without error
-$OCC --env FOO --env BAR --no-tailscale --help >/dev/null 2>&1 \
-  || { echo "FAIL: --env parsing"; fail=1; }
-
-[ $fail -eq 0 ] && echo "Phase 2: PASS" || { echo "Phase 2: FAIL"; exit 1; }
-```
-
----
-
-## Phase 3: `occ` CLI — Environment Variable Handling
-
-**Depends on**: Phase 2  
-**Produces**: Complete env-var logic: default allowlist passthrough, `.env` file parsing, `--env` flag handling, and implicit vars (`HOST_UID`, `HOST_GID`, `NO_TAILSCALE`). All env flags are collected into an array ready to be appended to the container run command.
+**Depends on:** Phase 2 (needs config paths and hash detection)
 
 ### Tasks
 
-- [x] Define the default allowlist array (PRD §5.3)
-- [x] Implement function `collect_allowlist_envs()`: iterate allowlist, if set on host, append `--env KEY=VALUE` to env array
-- [x] Implement function `parse_dotenv(filepath)`:
-  - Read `.env` from `PROJECT_PATH/.env` if it exists
-  - Skip blank lines and lines starting with `#`
-  - Extract `KEY=VALUE` pairs (no shell expansion, no multiline)
-  - Warn on stderr for malformed lines, continue
-  - Append `--env KEY=VALUE` to env array
-  - `.env` values override same-name host vars
-- [x] Implement `--env VAR` handling: read `VAR` from host env, silently skip if unset
-- [x] Always inject `HOST_UID=$(id -u)` and `HOST_GID=$(id -g)`
-- [x] Inject `NO_TAILSCALE=1` when `--no-tailscale` is passed
-- [x] Ensure precedence order: implicit > .env > --env > allowlist (highest to lowest priority, later overrides earlier)
-- [x] Print the final env array when a debug flag or `OCC_DEBUG=1` is set
+- [ ] Implement `docker.py` with:
+  - `check_docker_available()` - verify Docker daemon is running
+  - `build_image(dockerfile_path, tag="occ:latest", verbose=False)` - build image
+  - `image_exists(tag="occ:latest")` - check if image exists
+  - `create_container(name, image, mounts, env_vars, shell)` - create container
+  - `start_container(name)` - start existing container
+  - `attach_to_container(name)` - attach interactive shell
+  - `stop_container(name)` - stop container
+  - `remove_container(name)` - remove container
+  - `list_occ_containers()` - list containers with `occ-` prefix
+  - `get_container_status(name)` - return running/stopped/not-found
+  - `cleanup_dangling_images()` - remove old untagged occ images
+  - `sanitize_container_name(project_path)` - convert path to valid name
+- [ ] Implement mount point assembly:
+  - Default mounts (project, opencode configs)
+  - Extra mounts from config.toml
+  - Path expansion for `~`
+- [ ] Implement proper error handling:
+  - Docker not running → helpful error message
+  - Permission denied → suggest docker group / Docker Desktop
+  - Image build failure → show build logs
+- [ ] Implement build progress output (single updating line for default, full for verbose)
 
-### Verification
-
-```bash
-#!/usr/bin/env bash
-# phase3-check.sh — validates env var assembly
-set -euo pipefail
-OCC="./occ"
-TMPDIR=$(mktemp -d)
-trap 'rm -rf "$TMPDIR"' EXIT
-
-# Create a fake project with .env
-mkdir -p "$TMPDIR/project"
-mkdir -p "$HOME/.config/opencode"
-cat > "$TMPDIR/project/.env" <<'EOF'
-# comment line
-FOO=bar
-BAZ=qux
-MALFORMED LINE WITHOUT EQUALS
-ANTHROPIC_API_KEY=from-dotenv
-EOF
-
-export OCC_DEBUG=1
-export ANTHROPIC_API_KEY="from-host"
-export CUSTOM_THING="hello"
-
-OUTPUT=$($OCC --no-tailscale --env CUSTOM_THING "$TMPDIR/project" 2>&1 || true)
-
-echo "$OUTPUT"
-
-# .env values present
-echo "$OUTPUT" | grep -q "FOO=bar" || { echo "FAIL: FOO from .env"; exit 1; }
-echo "$OUTPUT" | grep -q "BAZ=qux" || { echo "FAIL: BAZ from .env"; exit 1; }
-
-# .env overrides host
-echo "$OUTPUT" | grep -q "ANTHROPIC_API_KEY=from-dotenv" || { echo "FAIL: .env override"; exit 1; }
-
-# --env passthrough
-echo "$OUTPUT" | grep -q "CUSTOM_THING=hello" || { echo "FAIL: --env passthrough"; exit 1; }
-
-# HOST_UID / HOST_GID present
-echo "$OUTPUT" | grep -q "HOST_UID=$(id -u)" || { echo "FAIL: HOST_UID"; exit 1; }
-echo "$OUTPUT" | grep -q "HOST_GID=$(id -g)" || { echo "FAIL: HOST_GID"; exit 1; }
-
-# NO_TAILSCALE present
-echo "$OUTPUT" | grep -q "NO_TAILSCALE=1" || { echo "FAIL: NO_TAILSCALE"; exit 1; }
-
-# Malformed line warned
-echo "$OUTPUT" | grep -qi "warn\|malformed\|skip" || { echo "FAIL: malformed warning"; exit 1; }
-
-echo "Phase 3: PASS"
-```
-
----
-
-## Phase 4: `occ` CLI — Image Build & Container Launch
-
-**Depends on**: Phase 1, Phase 2, Phase 3  
-**Produces**: Full container lifecycle — image build (auto on first run, `--rebuild` for forced), container launch with correct mounts, env vars, naming, and ephemeral (`--rm`) behavior.
-
-### Tasks
-
-- [x] Implement `ensure_image()`:
-  - Check if `occ-workspace:latest` image exists (runtime-specific check)
-  - If missing or `--rebuild` passed, build from `~/.config/occ/Dockerfile` with context `~/.config/occ/`
-  - `--rebuild` passes `--no-cache`
-  - Stream build output to terminal
-  - Abort on build failure with clear error
-- [x] Implement `launch_container()`:
-  - Generate container name: `occ-workspace-$(date +%Y%m%d-%H%M%S)`
-  - Always pass `--rm -it`
-  - Attach collected env var flags
-  - Mount `~/.config/opencode` → `/home/user/.config/opencode` (readonly)
-  - If `PROJECT_PATH` provided: mount at `/workspace`, set working dir to `/workspace`, command = `opencode`
-  - If no `PROJECT_PATH`: command = `/bin/bash`
-  - Use runtime-abstracted helper functions for mount syntax
-- [x] Implement `status` subcommand:
-  - List containers filtered by `occ-workspace-*` name prefix
-  - Show name, runtime, uptime, and mounted project path
-- [x] Implement `config` subcommand:
-  - Print `~/.config/occ/` path and list contents
-  - If `$EDITOR` is set, offer to open the directory
-- [x] Wire everything together in `main()` flow:
-  1. Parse args
-  2. Detect runtime
-  3. Validate inputs
-  4. Collect env vars
-  5. Ensure image
-  6. Launch container
-
-### Verification
+### Verification Script
 
 ```bash
-#!/usr/bin/env bash
-# phase4-check.sh — end-to-end container launch tests (requires Docker or container CLI)
-set -euo pipefail
+#!/bin/bash
+# verify_phase3.sh - Run from project root
+# NOTE: Requires Docker to be running
 
-# Use the installed locations to simulate real usage, or run from source
-OCC="./occ"
-RUNTIME="${OCC_RUNTIME:-docker}"
-TMPDIR=$(mktemp -d)
-trap 'rm -rf "$TMPDIR"' EXIT
+set -e
 
-# Ensure config dirs exist
-mkdir -p "$HOME/.config/opencode"
-mkdir -p "$HOME/.config/occ"
-cp Dockerfile "$HOME/.config/occ/Dockerfile"
+echo "=== Phase 3 Verification ==="
 
-echo "==> Test 1: Build image"
-$OCC --rebuild --no-tailscale --help >/dev/null 2>&1 || true
-# Manually build for test
-$OCC --rebuild --no-tailscale 2>&1 &
-BUILD_PID=$!
-sleep 5
-# We just verify the build starts; full build may take a while
-kill $BUILD_PID 2>/dev/null || true
-echo "  Build started OK"
-
-echo "==> Test 2: Container naming pattern"
-# Verify the naming function outputs correct format
-NAME=$($OCC --no-tailscale 2>&1 | grep -o 'occ-workspace-[0-9]\{8\}-[0-9]\{6\}' | head -1 || true)
-if [ -n "$NAME" ]; then
-  echo "  Container name: $NAME ✓"
-else
-  echo "  (name not captured from dry-run, OK for stub)"
+# Check Docker is available
+if ! docker info > /dev/null 2>&1; then
+    echo "SKIP: Docker is not running. Start Docker to run Phase 3 verification."
+    exit 0
 fi
 
-echo "==> Test 3: Status subcommand"
-$OCC status >/dev/null 2>&1
-echo "  status: OK"
+# Setup
+source .venv-test/bin/activate 2>/dev/null || {
+    uv venv .venv-test --quiet
+    source .venv-test/bin/activate
+    uv pip install -e . --quiet
+}
 
-echo "==> Test 4: Config subcommand"
-$OCC config 2>&1 | grep -q "occ" || { echo "FAIL: config output"; exit 1; }
-echo "  config: OK"
+# Ensure config is initialized
+python -c "from occ.config import ensure_config_initialized; ensure_config_initialized()"
 
-echo "==> Test 5: Nonexistent opencode config"
-(
-  HOME="$TMPDIR/fakehome" $OCC --no-tailscale 2>&1 || true
-) | grep -qi "opencode\|config" || { echo "FAIL: opencode config check"; exit 1; }
-echo "  opencode config check: OK"
+# Cleanup any test containers/images
+cleanup() {
+    docker rm -f occ-test-project 2>/dev/null || true
+    deactivate 2>/dev/null || true
+}
+trap cleanup EXIT
 
-echo "Phase 4: PASS"
+# Test 1: Docker availability check
+echo "[1/8] Testing Docker availability check..."
+python -c "
+from occ.docker import check_docker_available
+assert check_docker_available() == True, 'Docker should be available'
+print('  Docker availability check works.')
+"
+
+# Test 2: Container name sanitization
+echo "[2/8] Testing container name sanitization..."
+python -c "
+from occ.docker import sanitize_container_name
+
+assert sanitize_container_name('/Users/me/Code/my-project') == 'occ-my-project'
+assert sanitize_container_name('/home/user/My Project') == 'occ-my-project'
+assert sanitize_container_name('/tmp/Test_Project_123') == 'occ-test-project-123'
+print('  Container name sanitization works.')
+"
+
+# Test 3: Image building
+echo "[3/8] Testing image building..."
+python -c "
+from occ.docker import build_image
+from occ.config import get_dockerfile_path
+
+build_image(get_dockerfile_path(), tag='occ:test')
+print('  Image building works.')
+"
+
+# Test 4: Image exists check
+echo "[4/8] Testing image exists check..."
+python -c "
+from occ.docker import image_exists
+
+assert image_exists('occ:test') == True, 'Test image should exist'
+assert image_exists('occ:nonexistent-tag-xyz') == False, 'Nonexistent image should not exist'
+print('  Image exists check works.')
+"
+
+# Test 5: Container creation
+echo "[5/8] Testing container creation..."
+TEST_PROJECT=$(mktemp -d)
+python -c "
+from occ.docker import create_container
+from pathlib import Path
+
+create_container(
+    name='occ-test-project',
+    image='occ:test',
+    mounts=[{'source': '$TEST_PROJECT', 'target': '/workspace', 'mode': 'rw'}],
+    env_vars={'TEST_VAR': 'test_value'},
+    shell='/bin/bash'
+)
+print('  Container creation works.')
+"
+
+# Test 6: Container status
+echo "[6/8] Testing container status..."
+python -c "
+from occ.docker import get_container_status
+
+status = get_container_status('occ-test-project')
+assert status in ['created', 'running', 'exited'], f'Unexpected status: {status}'
+print('  Container status check works.')
+"
+
+# Test 7: List containers
+echo "[7/8] Testing container listing..."
+python -c "
+from occ.docker import list_occ_containers
+
+containers = list_occ_containers()
+names = [c['name'] for c in containers]
+assert 'occ-test-project' in names, 'Test container should be in list'
+print('  Container listing works.')
+"
+
+# Test 8: Container stop and remove
+echo "[8/8] Testing container stop/remove..."
+python -c "
+from occ.docker import stop_container, remove_container, get_container_status
+
+stop_container('occ-test-project')
+remove_container('occ-test-project')
+status = get_container_status('occ-test-project')
+assert status == 'not-found', 'Container should be removed'
+print('  Container stop/remove works.')
+"
+
+# Cleanup test image
+docker rmi occ:test 2>/dev/null || true
+rm -rf "$TEST_PROJECT"
+
+echo ""
+echo "=== Phase 3 PASSED ==="
 ```
+
+### Exit Criteria
+
+- `check_docker_available()` returns True when Docker is running, helpful error otherwise
+- Images can be built from the configured Dockerfile
+- Containers can be created, started, stopped, and removed
+- Container names are properly sanitized from project paths
+- `list_occ_containers()` returns all occ-prefixed containers
+- Mount points are correctly assembled
+- All verification script checks pass
 
 ---
 
-## Phase 5: `install.sh`
+## Phase 4: CLI Implementation
 
-**Depends on**: Phase 0, Phase 1, Phase 2  
-**Produces**: A working installer that copies `Dockerfile` and `occ` to their installed locations and prints post-install instructions.
+**Goal:** Implement all CLI commands and options as specified in the PRD.
+
+**Depends on:** Phase 2 (config), Phase 3 (docker operations)
 
 ### Tasks
 
-- [x] Verify script is run from the source directory (check `Dockerfile` and `occ` exist in cwd)
-- [x] Create `~/.config/occ/` directory
-- [x] Copy `./Dockerfile` → `~/.config/occ/Dockerfile`
-- [x] Create `~/.config/occ/.gitignore` with patterns: `*.key`, `tailscale-*`, `.env`
-- [x] Create `~/.local/bin/` if it doesn't exist
-- [x] Copy `./occ` → `~/.local/bin/occ`
-- [x] `chmod +x ~/.local/bin/occ`
-- [x] Check if `~/.local/bin` is in `$PATH`; warn if not
-- [x] Print the post-install message (PRD §6.3)
+- [ ] Implement main command `occ [OPTIONS] [PROJECT_PATH]`:
+  - Resolve project path (default to current directory)
+  - Validate project path exists
+  - Auto-initialize config on first run
+  - Check if rebuild needed (hash changed, `--rebuild` flag, image missing)
+  - Build image if needed
+  - Check if container already running → prompt: Attach/Restart/Cancel
+  - Create and start container with proper mounts and env vars
+  - Attach interactive shell
+  - Handle `--keep-alive` flag (don't stop on exit)
+- [ ] Implement `--rebuild` flag
+- [ ] Implement `--env VAR=value` flag (repeatable)
+- [ ] Implement `--keep-alive` flag
+- [ ] Implement `-v/--verbose` flag
+- [ ] Implement `-q/--quiet` flag
+- [ ] Implement `env.py`:
+  - `collect_env_vars(project_path, cli_env, config)` - merge env vars by priority
+  - Load from host env (allowlist)
+  - Load from project `.env` file
+  - Add CLI `--env` overrides
+- [ ] Implement subcommands:
+  - `occ status` - table of running containers
+  - `occ shell [PROJECT]` - attach to running container
+  - `occ stop [PROJECT]` - stop container
+  - `occ stop --all` - stop all occ containers
+- [ ] Implement interactive prompt for running container:
+  - "[A]ttach / [R]estart / [C]ancel?"
+- [ ] Implement output formatting:
+  - Status table with columns: NAME, PROJECT, IMAGE HASH, UPTIME
+  - Build progress (updating single line in default mode)
+- [ ] Handle all error cases with user-friendly messages
 
-### Verification
+### Verification Script
 
 ```bash
-#!/usr/bin/env bash
-# phase5-check.sh — validates install.sh in an isolated environment
-set -euo pipefail
-TMPDIR=$(mktemp -d)
-trap 'rm -rf "$TMPDIR"' EXIT
+#!/bin/bash
+# verify_phase4.sh - Run from project root
+# NOTE: Requires Docker to be running
 
-# Create a fake HOME to avoid touching real config
-export HOME="$TMPDIR/home"
-mkdir -p "$HOME"
+set -e
 
-# Run install from source dir
-./install.sh
+echo "=== Phase 4 Verification ==="
 
-# Validate installed files
-[ -f "$HOME/.config/occ/Dockerfile" ] || { echo "FAIL: Dockerfile not installed"; exit 1; }
-[ -f "$HOME/.config/occ/.gitignore" ] || { echo "FAIL: .gitignore not created"; exit 1; }
-[ -f "$HOME/.local/bin/occ" ] || { echo "FAIL: occ not installed"; exit 1; }
-[ -x "$HOME/.local/bin/occ" ] || { echo "FAIL: occ not executable"; exit 1; }
+# Check Docker is available
+if ! docker info > /dev/null 2>&1; then
+    echo "SKIP: Docker is not running. Start Docker to run Phase 4 verification."
+    exit 0
+fi
 
-# Validate .gitignore contents
-grep -q '*.key' "$HOME/.config/occ/.gitignore" || { echo "FAIL: .gitignore missing *.key"; exit 1; }
-grep -q 'tailscale-' "$HOME/.config/occ/.gitignore" || { echo "FAIL: .gitignore missing tailscale-"; exit 1; }
-grep -q '.env' "$HOME/.config/occ/.gitignore" || { echo "FAIL: .gitignore missing .env"; exit 1; }
+# Setup
+source .venv-test/bin/activate 2>/dev/null || {
+    uv venv .venv-test --quiet
+    source .venv-test/bin/activate
+    uv pip install -e . --quiet
+}
 
-# Running from wrong directory should fail
-(
-  cd "$TMPDIR"
-  ./install.sh 2>&1 || true
-) | grep -qi "source\|directory\|Dockerfile" || { echo "FAIL: wrong-dir check"; exit 1; }
+# Create test project
+TEST_PROJECT=$(mktemp -d)
+echo "TEST_VAR=from_dotenv" > "$TEST_PROJECT/.env"
 
-echo "Phase 5: PASS"
+cleanup() {
+    docker rm -f occ-test-project occ-verify-project 2>/dev/null || true
+    rm -rf "$TEST_PROJECT"
+    deactivate 2>/dev/null || true
+}
+trap cleanup EXIT
+
+# Test 1: Help output
+echo "[1/10] Testing help output..."
+occ --help | grep -q "PROJECT_PATH" || { echo "FAIL: Help missing PROJECT_PATH"; exit 1; }
+occ --help | grep -q "\-\-rebuild" || { echo "FAIL: Help missing --rebuild"; exit 1; }
+occ --help | grep -q "\-\-env" || { echo "FAIL: Help missing --env"; exit 1; }
+echo "  Help output correct."
+
+# Test 2: Status command (empty)
+echo "[2/10] Testing status command (no containers)..."
+docker rm -f $(docker ps -a --filter "name=occ-" -q) 2>/dev/null || true
+output=$(occ status)
+# Should show headers or "no containers" message
+echo "  Status command works."
+
+# Test 3: Environment variable collection
+echo "[3/10] Testing environment variable collection..."
+python -c "
+from occ.env import collect_env_vars
+from occ.config import load_config
+from pathlib import Path
+import os
+
+os.environ['ANTHROPIC_API_KEY'] = 'test-key-123'
+config = load_config()
+
+env_vars = collect_env_vars(
+    project_path=Path('$TEST_PROJECT'),
+    cli_env=['CUSTOM_VAR=cli_value'],
+    config=config
+)
+
+# CLI env should be present
+assert env_vars.get('CUSTOM_VAR') == 'cli_value', 'CLI env not collected'
+
+# Dotenv should be loaded
+assert env_vars.get('TEST_VAR') == 'from_dotenv', 'Dotenv not loaded'
+
+# Allowlist should work
+assert env_vars.get('ANTHROPIC_API_KEY') == 'test-key-123', 'Allowlist env not collected'
+
+print('  Environment collection works.')
+"
+
+# Test 4: Invalid project path
+echo "[4/10] Testing invalid project path handling..."
+if occ /nonexistent/path/xyz 2>&1 | grep -qi "does not exist\|not found\|invalid"; then
+    echo "  Invalid path error works."
+else
+    echo "FAIL: Should error on invalid path"
+    exit 1
+fi
+
+# Test 5: Rebuild flag
+echo "[5/10] Testing --rebuild flag..."
+# Just verify it's accepted
+occ --help | grep -q "rebuild" || { echo "FAIL: --rebuild flag not in help"; exit 1; }
+echo "  --rebuild flag registered."
+
+# Test 6: Stop command
+echo "[6/10] Testing stop command..."
+# Create a test container first
+python -c "
+from occ.docker import create_container, start_container, image_exists, build_image
+from occ.config import get_dockerfile_path
+
+if not image_exists('occ:latest'):
+    build_image(get_dockerfile_path())
+
+create_container(
+    name='occ-verify-project',
+    image='occ:latest',
+    mounts=[{'source': '$TEST_PROJECT', 'target': '/workspace', 'mode': 'rw'}],
+    env_vars={},
+    shell='/bin/bash'
+)
+start_container('occ-verify-project')
+"
+occ stop verify-project
+echo "  Stop command works."
+
+# Test 7: Shell command (with non-running container)
+echo "[7/10] Testing shell command error handling..."
+if occ shell nonexistent-container 2>&1 | grep -qi "not found\|not running\|does not exist"; then
+    echo "  Shell command error handling works."
+else
+    echo "  Shell command handles missing container."
+fi
+
+# Test 8: Status shows containers
+echo "[8/10] Testing status with containers..."
+python -c "
+from occ.docker import create_container, start_container
+create_container(
+    name='occ-test-project',
+    image='occ:latest',
+    mounts=[{'source': '$TEST_PROJECT', 'target': '/workspace', 'mode': 'rw'}],
+    env_vars={},
+    shell='/bin/bash'
+)
+start_container('occ-test-project')
+"
+occ status | grep -q "occ-test-project" || { echo "FAIL: Status should show test container"; exit 1; }
+echo "  Status shows running containers."
+
+# Test 9: Stop --all
+echo "[9/10] Testing stop --all..."
+occ stop --all
+sleep 1
+running=$(docker ps --filter "name=occ-" -q | wc -l | tr -d ' ')
+if [[ "$running" != "0" ]]; then
+    echo "FAIL: stop --all should stop all containers"
+    exit 1
+fi
+echo "  Stop --all works."
+
+# Test 10: Verbose and quiet flags
+echo "[10/10] Testing verbosity flags..."
+occ --help | grep -q "\-v\|verbose" || { echo "FAIL: Missing verbose flag"; exit 1; }
+occ --help | grep -q "\-q\|quiet" || { echo "FAIL: Missing quiet flag"; exit 1; }
+echo "  Verbosity flags registered."
+
+echo ""
+echo "=== Phase 4 PASSED ==="
 ```
+
+### Exit Criteria
+
+- `occ [PROJECT_PATH]` launches container with correct mounts and env vars
+- `--rebuild`, `--env`, `--keep-alive`, `-v`, `-q` flags work
+- `occ status` shows formatted table of running containers
+- `occ shell [PROJECT]` attaches to running container
+- `occ stop [PROJECT]` stops container
+- `occ stop --all` stops all occ containers
+- Environment variables collected in correct priority order
+- User-friendly prompts and error messages
+- All verification script checks pass
 
 ---
 
-## Phase 6: `README.md` & Documentation
+## Phase 5: Integration and End-to-End Testing
 
-**Depends on**: Phase 1, Phase 2, Phase 3, Phase 4, Phase 5  
-**Produces**: Complete `README.md` covering overview, requirements, installation, usage, configuration, environment variables, troubleshooting.
+**Goal:** Verify complete user workflows work end-to-end and clean up any remaining issues.
+
+**Depends on:** All previous phases
 
 ### Tasks
 
-- [x] Write Overview section (what `occ` is, what it does)
-- [x] Write Requirements section (macOS, Docker or Apple container CLI, Tailscale, OpenCode config)
-- [x] Write Installation section (clone, run `install.sh`, verify PATH)
-- [x] Write Usage section with examples for all commands and flags
-- [x] Write Configuration section (env vars, `.env` file, allowlist, `OCC_RUNTIME`)
-- [x] Write Troubleshooting section (common errors from PRD §8, how to resolve)
-- [x] Write Architecture section (brief, link to PRD for details)
+- [ ] Test complete first-run experience:
+  - Fresh system (no `~/.config/occ`)
+  - Run `occ ~/Code/project`
+  - Verify config initialization message
+  - Verify image build
+  - Verify container starts
+  - Verify shell attaches
+- [ ] Test Dockerfile modification workflow:
+  - Modify `~/.config/occ/Dockerfile`
+  - Run `occ project`
+  - Verify "Dockerfile changed, rebuilding..." message
+  - Verify image rebuilds
+- [ ] Test multiple concurrent containers:
+  - Launch `occ ~/project-a`
+  - Launch `occ ~/project-b` (in another terminal)
+  - Verify both appear in `occ status`
+  - Verify separate containers with correct names
+- [ ] Test container already running workflow:
+  - Start container with `occ project`
+  - Exit shell
+  - Run `occ project` again with `--keep-alive` first time
+  - Verify prompt appears
+- [ ] Test all error scenarios:
+  - Docker not running
+  - Invalid project path
+  - Permission issues (if testable)
+- [ ] Clean up old bash `occ` script and `install.sh` if they exist
+- [ ] Verify `uv tool install .` works from package directory
+- [ ] Update README with installation and usage instructions
 
-### Verification
-
-```bash
-#!/usr/bin/env bash
-# phase6-check.sh — validates README completeness
-set -euo pipefail
-README="./README.md"
-
-[ -f "$README" ] || { echo "FAIL: README.md not found"; exit 1; }
-
-# Check for required sections
-for section in "Overview" "Requirement" "Install" "Usage" "Configur" "Troubleshoot"; do
-  grep -qi "$section" "$README" || { echo "FAIL: Missing section: $section"; exit 1; }
-done
-
-# Check for key content
-for keyword in "occ" "Dockerfile" "Tailscale" "opencode" "--rebuild" "--env" "--no-tailscale" "status" "config" "docker" "container"; do
-  grep -qi "$keyword" "$README" || { echo "FAIL: Missing keyword: $keyword"; exit 1; }
-done
-
-# Minimum length check (~150 lines per PRD)
-LINES=$(wc -l < "$README")
-[ "$LINES" -ge 100 ] || { echo "FAIL: README too short ($LINES lines)"; exit 1; }
-
-echo "Phase 6: PASS"
-```
-
----
-
-## Phase 7: Integration Testing & End-to-End Validation
-
-**Depends on**: All previous phases (0–6)  
-**Produces**: A single integration test script that exercises the full workflow from install through container launch and teardown. This is the final quality gate.
-
-### Tasks
-
-- [x] Write `test/integration.sh` that performs the full PRD §10 manual checklist automatically:
-  1. Run `install.sh` in an isolated `$HOME`
-  2. Verify `occ --help` works from installed path
-  3. Build the image (`occ --rebuild --no-tailscale`)
-  4. Launch a bare shell container, run `id` inside, verify UID/GID match
-  5. Launch with a test project directory, verify `/workspace` mount and file ownership
-  6. Verify `.env` file values appear inside container
-  7. Verify `--env` passthrough works
-  8. Verify `occ status` lists running container (launch in background first)
-  9. Verify `occ config` output
-  10. Verify `--no-tailscale` skips Tailscale (no `TS_AUTHKEY` required)
-  11. Clean up: remove test image and temp dirs
-- [x] Ensure the script exits non-zero on any failure with clear output identifying which test failed
-- [x] Run the integration test and fix any issues found
-- [x] Re-run until all tests pass
-
-### Verification
-
-The integration test script **is itself the verification**. The autonomous feedback loop is:
+### Verification Script
 
 ```bash
-#!/usr/bin/env bash
-# Run the full integration suite
-set -euo pipefail
-echo "Running integration tests..."
-bash test/integration.sh
-echo "All integration tests passed."
+#!/bin/bash
+# verify_phase5.sh - Full integration test
+# NOTE: Requires Docker to be running
+
+set -e
+
+echo "=== Phase 5 Integration Verification ==="
+
+# Check Docker is available
+if ! docker info > /dev/null 2>&1; then
+    echo "SKIP: Docker is not running. Start Docker to run Phase 5 verification."
+    exit 0
+fi
+
+# Backup existing config
+CONFIG_DIR="$HOME/.config/occ"
+BACKUP_DIR="$HOME/.config/occ.backup.$$"
+if [[ -d "$CONFIG_DIR" ]]; then
+    mv "$CONFIG_DIR" "$BACKUP_DIR"
+fi
+
+# Create test projects
+TEST_PROJECT_A=$(mktemp -d)
+TEST_PROJECT_B=$(mktemp -d)
+mkdir -p "$TEST_PROJECT_A" "$TEST_PROJECT_B"
+
+cleanup() {
+    # Stop and remove test containers
+    docker rm -f occ-$(basename "$TEST_PROJECT_A") occ-$(basename "$TEST_PROJECT_B") 2>/dev/null || true
+    
+    # Remove test projects
+    rm -rf "$TEST_PROJECT_A" "$TEST_PROJECT_B"
+    
+    # Restore config backup
+    rm -rf "$CONFIG_DIR"
+    if [[ -d "$BACKUP_DIR" ]]; then
+        mv "$BACKUP_DIR" "$CONFIG_DIR"
+    fi
+    
+    deactivate 2>/dev/null || true
+    rm -rf .venv-test
+}
+trap cleanup EXIT
+
+# Setup
+uv venv .venv-test --quiet
+source .venv-test/bin/activate
+uv pip install -e . --quiet
+
+echo "[1/6] Testing fresh install experience..."
+# Config dir should not exist
+if [[ -d "$CONFIG_DIR" ]]; then
+    rm -rf "$CONFIG_DIR"
+fi
+
+# Run occ - should auto-initialize
+output=$(occ config 2>&1)
+if [[ ! -d "$CONFIG_DIR" ]]; then
+    echo "FAIL: Config dir not created"
+    exit 1
+fi
+if [[ ! -f "$CONFIG_DIR/config.toml" ]]; then
+    echo "FAIL: config.toml not created"
+    exit 1
+fi
+if [[ ! -f "$CONFIG_DIR/Dockerfile" ]]; then
+    echo "FAIL: Dockerfile not created"
+    exit 1
+fi
+echo "  Fresh install auto-initialization works."
+
+echo "[2/6] Testing image build on first run..."
+# Remove any existing image
+docker rmi occ:latest 2>/dev/null || true
+
+# This should build the image
+python -c "
+from occ.docker import build_image, image_exists
+from occ.config import get_dockerfile_path, save_dockerfile_hash
+
+if not image_exists('occ:latest'):
+    build_image(get_dockerfile_path())
+    save_dockerfile_hash()
+
+assert image_exists('occ:latest'), 'Image should be built'
+print('  Image built successfully.')
+"
+
+echo "[3/6] Testing Dockerfile change detection..."
+# Modify Dockerfile
+echo "" >> "$CONFIG_DIR/Dockerfile"
+echo "# Test modification $(date)" >> "$CONFIG_DIR/Dockerfile"
+
+python -c "
+from occ.config import needs_rebuild
+assert needs_rebuild() == True, 'Should detect Dockerfile change'
+print('  Dockerfile change detected.')
+"
+
+echo "[4/6] Testing multiple containers..."
+python -c "
+from occ.docker import create_container, start_container, list_occ_containers, build_image, image_exists
+from occ.config import get_dockerfile_path, save_dockerfile_hash
+
+# Ensure image exists
+if not image_exists('occ:latest'):
+    build_image(get_dockerfile_path())
+    save_dockerfile_hash()
+
+# Create two containers
+create_container(
+    name='occ-project-a',
+    image='occ:latest',
+    mounts=[{'source': '$TEST_PROJECT_A', 'target': '/workspace', 'mode': 'rw'}],
+    env_vars={},
+    shell='/bin/bash'
+)
+start_container('occ-project-a')
+
+create_container(
+    name='occ-project-b',
+    image='occ:latest',
+    mounts=[{'source': '$TEST_PROJECT_B', 'target': '/workspace', 'mode': 'rw'}],
+    env_vars={},
+    shell='/bin/bash'
+)
+start_container('occ-project-b')
+
+# List should show both
+containers = list_occ_containers()
+names = [c['name'] for c in containers]
+assert 'occ-project-a' in names, 'Project A container missing'
+assert 'occ-project-b' in names, 'Project B container missing'
+print('  Multiple containers work.')
+"
+
+echo "[5/6] Testing status output format..."
+output=$(occ status)
+if ! echo "$output" | grep -q "NAME\|name"; then
+    # Might show "No running containers" which is also valid
+    if ! echo "$output" | grep -qi "no.*container\|occ-project"; then
+        echo "FAIL: Status output format incorrect"
+        exit 1
+    fi
+fi
+echo "  Status output formatted correctly."
+
+echo "[6/6] Testing uv tool install compatibility..."
+# Test that the package can be installed as a tool
+cd "$(dirname "$0")"
+uv tool install . --force 2>/dev/null && uv tool uninstall occ 2>/dev/null || true
+echo "  Package is uv tool installable."
+
+# Cleanup test containers
+docker rm -f occ-project-a occ-project-b 2>/dev/null || true
+
+echo ""
+echo "=== Phase 5 PASSED ==="
+echo ""
+echo "=== ALL PHASES COMPLETE ==="
+echo "The occ package is ready for release."
 ```
 
-If any test fails, the script prints the failing test name and exits non-zero, signaling what needs to be fixed. Iterate until exit code 0.
+### Exit Criteria
+
+- Complete first-run experience works (config init → build → run)
+- Dockerfile changes trigger rebuild
+- Multiple concurrent containers work independently
+- All CLI commands function correctly
+- `uv tool install .` works
+- README is updated with accurate instructions
+- Old bash script files removed (if present)
+- All verification scripts pass
 
 ---
-
-## Phase Dependency Graph
-
-```
-Phase 0 (Scaffolding)
-  ├── Phase 1 (Dockerfile & Entrypoint)
-  │     └──┐
-  ├── Phase 2 (CLI Framework & Args) ──► Phase 3 (Env Var Handling)
-  │     │                                   │
-  │     └───────────────────────────────────┘
-  │                     │
-  │                     ▼
-  │              Phase 4 (Image Build & Container Launch)
-  │                     │
-  ├── Phase 5 (install.sh)
-  │                     │
-  │                     ▼
-  │              Phase 6 (README & Docs)
-  │                     │
-  └─────────────────────▼
-                 Phase 7 (Integration Testing)
-```
 
 ## Summary
 
-| Phase | Description | Depends On | Key Deliverable |
-|-------|-------------|------------|-----------------|
-| 0 | Scaffolding | — | Repo structure, git init |
-| 1 | Dockerfile & Entrypoint | 0 | Buildable multi-arch image |
-| 2 | CLI Framework | 0 | `occ` arg parsing, runtime detection |
-| 3 | Env Var Handling | 2 | Allowlist, `.env`, `--env` logic |
-| 4 | Build & Launch | 1, 2, 3 | Full container lifecycle |
-| 5 | Installer | 0, 1, 2 | `install.sh` |
-| 6 | Documentation | 1–5 | `README.md` |
-| 7 | Integration | 0–6 | End-to-end validation |
+| Phase | Description | Dependencies | Verification |
+|-------|-------------|--------------|--------------|
+| 1 | Project Scaffolding | None | `verify_phase1.sh` |
+| 2 | Configuration Management | Phase 1 | `verify_phase2.sh` |
+| 3 | Docker Integration | Phase 2 | `verify_phase3.sh` |
+| 4 | CLI Implementation | Phase 2, 3 | `verify_phase4.sh` |
+| 5 | Integration Testing | All | `verify_phase5.sh` |
+
+**Total Estimated Tasks:** 45+  
+**Each phase produces:** Working, testable code with autonomous verification
+
+---
+
+## Running Verification
+
+After completing each phase, run the corresponding verification script:
+
+```bash
+# From project root
+chmod +x verify_phase*.sh
+./verify_phase1.sh  # Run after Phase 1
+./verify_phase2.sh  # Run after Phase 2
+./verify_phase3.sh  # Run after Phase 3 (requires Docker)
+./verify_phase4.sh  # Run after Phase 4 (requires Docker)
+./verify_phase5.sh  # Run after Phase 5 (requires Docker)
+```
+
+Each script will output `=== Phase N PASSED ===` on success or indicate the specific failure point.

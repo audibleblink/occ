@@ -1,0 +1,16 @@
+[container]
+stop_on_exit = true
+shell = "/bin/bash"
+
+[mounts]
+extra = []
+
+[env]
+allowlist = [
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "GEMINI_API_KEY",
+    "MISTRAL_API_KEY",
+]
+load_dotenv = true

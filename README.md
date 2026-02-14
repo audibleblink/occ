@@ -1,13 +1,11 @@
 # occ - OpenCode Container
 
-Ephemeral, Tailscale-connected development containers pre-loaded with OpenCode and developer tools.
+Ephemeral development containers pre-loaded with OpenCode and developer tools.
 
 ## Overview
 
 `occ` is a CLI tool that launches isolated development containers with:
 
-- **OpenCode** pre-installed and ready to use
-- **Tailscale networking** for secure connectivity (optional)
 - **Project mounting** with correct file ownership
 - **Environment variable passthrough** via allowlist, `.env` files, and flags
 - **Multi-architecture support** (arm64 + amd64)
@@ -15,71 +13,40 @@ Ephemeral, Tailscale-connected development containers pre-loaded with OpenCode a
 One command spins up a fully-equipped workspace. When you exit, the container is destroyed—no state accumulates.
 
 ```bash
-occ ~/Code/myproject    # Launch OpenCode with your project
+occ ~/Code/myproject    # Launch container with your project
 ```
 
-The container includes common dev tools: git, neovim, tmux, ripgrep, fzf, node, python, mise, uv, and more.
+The container includes common dev tools: git, neovim, tmux, ripgrep, fzf, python, and more.
 
 ## Requirements
 
-### Operating System
-
-- **macOS** (Linux support planned for future versions)
-
-### Container Runtime (one of)
-
-- **Apple container CLI** (macOS 26+), OR
+- **Python 3.12+**
 - **Docker Desktop** / **Docker Engine**
-
-### Tailscale (optional)
-
-- Tailscale account with an [auth key](https://tailscale.com/kb/1085/auth-keys)
-- Required only if you want Tailscale networking; use `--no-tailscale` to skip
-
-### OpenCode Configuration
-
-- `~/.config/opencode/` directory with valid OpenCode configuration
-- Install OpenCode first: `curl -fsSL https://opencode.ai/install | bash`
 
 ## Installation
 
-1. **Clone the repository**
+Install using `uv`:
 
-   ```bash
-   git clone https://github.com/yourorg/occ.git
-   cd occ
-   ```
+```bash
+uv tool install occ
+```
 
-2. **Run the installer**
+Or install from source:
 
-   ```bash
-   ./install.sh
-   ```
+```bash
+git clone https://github.com/yourorg/occ.git
+cd occ
+uv tool install .
+```
 
-   This will:
-   - Copy `Dockerfile` to `~/.config/occ/`
-   - Install `occ` to `~/.local/bin/`
+Verify installation:
 
-3. **Add `~/.local/bin` to your PATH** (if not already)
+```bash
+occ --help
+occ --version
+```
 
-   ```bash
-   # Add to your ~/.bashrc, ~/.zshrc, or equivalent
-   export PATH="$HOME/.local/bin:$PATH"
-   ```
-
-4. **Set your Tailscale auth key** (optional)
-
-   ```bash
-   export TS_AUTHKEY="tskey-auth-xxxxx"
-   ```
-
-5. **Verify installation**
-
-   ```bash
-   occ --help
-   ```
-
-The first run will build the container image, which takes 5-10 minutes.
+The first run will build the container image, which takes a few minutes.
 
 ## Usage
 
