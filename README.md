@@ -1,4 +1,4 @@
-# occ - OpenCode Container
+# occ - OpenCode Container CLI
 
 Ephemeral development containers pre-loaded with OpenCode and developer tools.
 
@@ -6,32 +6,31 @@ Ephemeral development containers pre-loaded with OpenCode and developer tools.
 
 `occ` is a CLI tool that launches isolated development containers with:
 
-- **Project mounting** with correct file ownership
-- **Environment variable passthrough** via allowlist, `.env` files, and flags
-- **Multi-architecture support** (arm64 + amd64)
+- **Project mounting** at `/workspace` with correct file ownership
+- **Environment variable passthrough** via allowlist, `.env` files, and CLI flags
+- **Automatic Dockerfile change detection** and rebuilds
+- **Multi-container support** for parallel projects
 
-One command spins up a fully-equipped workspace. When you exit, the container is destroyed—no state accumulates.
+One command spins up a fully-equipped workspace. Containers are automatically cleaned up when you exit.
 
 ```bash
-occ ~/Code/myproject    # Launch container with your project
+occ run ~/Code/myproject    # Launch container with your project
 ```
-
-The container includes common dev tools: git, neovim, tmux, ripgrep, fzf, python, and more.
 
 ## Requirements
 
 - **Python 3.12+**
-- **Docker Desktop** / **Docker Engine**
+- **Docker Desktop** or **Docker Engine**
 
 ## Installation
 
-Install using `uv`:
+Install using `uv tool`:
 
 ```bash
-uv tool install occ
+uv tool install git+https://github.com/yourorg/occ.git
 ```
 
-Or install from source:
+Or install from local source:
 
 ```bash
 git clone https://github.com/yourorg/occ.git
@@ -39,301 +38,202 @@ cd occ
 uv tool install .
 ```
 
+Or for development:
+
+```bash
+git clone https://github.com/yourorg/occ.git
+cd occ
+uv pip install -e .
+```
+
 Verify installation:
 
 ```bash
+occ --version   # Should print: 1.0.0
 occ --help
-occ --version
 ```
 
-The first run will build the container image, which takes a few minutes.
-
-## Usage
-
-### Basic Commands
+## Quick Start
 
 ```bash
-occ                         # Start bash shell in container
-occ ~/Code/project          # Start OpenCode with project mounted at /workspace
-occ --rebuild               # Force rebuild of the container image
-occ --env MY_VAR ~/proj     # Pass additional environment variable
-occ --no-tailscale          # Skip Tailscale setup (no TS_AUTHKEY required)
-occ status                  # List running occ containers
-occ config                  # Show config directory and contents
+# Launch container for current directory
+occ run
+
+# Launch container for a specific project
+occ run ~/Code/myproject
+
+# Force rebuild if Dockerfile changed
+occ run --rebuild
+
+# Pass extra environment variables
+occ run --env MY_API_KEY=secret ~/Code/myproject
+
+# Keep container running after exit (for reattaching later)
+occ run --keep-alive
 ```
 
-### Options Reference
+## Command Reference
+
+### Main Commands
+
+| Command | Description |
+|---------|-------------|
+| `occ run [PATH]` | Launch container for a project directory |
+| `occ status` | List running occ containers |
+| `occ shell [PROJECT]` | Attach to a running container |
+| `occ stop [PROJECT]` | Stop a container |
+| `occ stop --all` | Stop all occ containers |
+| `occ config` | Show configuration directory |
+| `occ config edit` | Edit config.toml in your editor |
+| `occ config reset` | Reset configuration to defaults |
+
+### Options for `occ run`
 
 | Option | Description |
 |--------|-------------|
-| `--rebuild` | Force rebuild of the container image, ignoring cache |
-| `--env VAR` | Pass an additional environment variable (repeatable) |
-| `--no-tailscale` | Skip Tailscale setup; does not require `TS_AUTHKEY` |
-| `--help` | Print usage information |
-
-### Subcommands
-
-| Subcommand | Description |
-|------------|-------------|
-| `occ status` | List running occ containers with name, status, and mounts |
-| `occ config` | Show the config directory path and list its contents |
+| `--rebuild` | Force rebuild of container image |
+| `--env`, `-e` | Pass env var (VAR=value), repeatable |
+| `--keep-alive` | Keep container running after shell exit |
+| `--verbose`, `-v` | Verbose output |
+| `--quiet`, `-q` | Minimal output |
 
 ### Examples
 
-**Start a quick bash session:**
 ```bash
-occ --no-tailscale
-```
+# Start a container for the current directory
+occ run
 
-**Work on a project with OpenCode:**
-```bash
-occ ~/Code/my-awesome-project
-```
+# Work on a specific project
+occ run ~/Code/my-awesome-project
 
-**Pass custom environment variables:**
-```bash
-export MY_API_KEY="secret123"
-occ --env MY_API_KEY ~/Code/project
-```
+# Pass multiple environment variables
+occ run -e API_KEY=secret -e DEBUG=1 ~/Code/project
 
-**Rebuild after modifying the Dockerfile:**
-```bash
-occ --rebuild --no-tailscale
-```
+# Rebuild after modifying the Dockerfile
+occ run --rebuild
 
-**Check what containers are running:**
-```bash
+# Check running containers
 occ status
+
+# Attach to a running container
+occ shell myproject
+
+# Stop a specific container
+occ stop myproject
+
+# Stop all containers
+occ stop --all
 ```
 
 ## Configuration
 
-### Environment Variables
-
-#### Runtime Selection
-
-| Variable | Description |
-|----------|-------------|
-| `OCC_RUNTIME` | Force a specific container runtime (`docker` or `container`) |
-| `OCC_DEBUG` | Set to `1` to print debug information including all env vars |
-
-#### Tailscale
-
-| Variable | Description |
-|----------|-------------|
-| `TS_AUTHKEY` | Tailscale auth key for automatic network connection |
-
-### Environment Variable Allowlist
-
-The following environment variables are automatically passed through to the container if set on the host:
-
-```
-TS_AUTHKEY          # Tailscale authentication
-LANG                # Locale settings
-LC_ALL
-LC_CTYPE
-EDITOR              # Preferred editor
-TERM                # Terminal type
-
-# API Keys
-ANTHROPIC_API_KEY
-OPENAI_API_KEY
-OPENROUTER_API_KEY
-
-# AWS Credentials
-AWS_ACCESS_KEY_ID
-AWS_SECRET_ACCESS_KEY
-AWS_SESSION_TOKEN
-
-# GitHub Tokens
-GITHUB_TOKEN
-GH_TOKEN
-```
-
-### Project `.env` File
-
-If your project directory contains a `.env` file, it will be automatically parsed and the variables passed to the container.
-
-```bash
-# ~/Code/myproject/.env
-DATABASE_URL=postgres://localhost/mydb
-API_SECRET=mysecret
-```
-
-**Precedence order** (highest to lowest):
-1. Implicit vars (`HOST_UID`, `HOST_GID`, `NO_TAILSCALE`)
-2. Project `.env` file
-3. `--env` flag values
-4. Allowlist values from host environment
-
-### Customizing the Dockerfile
-
-The container image is built from `~/.config/occ/Dockerfile`. You can modify this file to:
-
-- Add additional packages
-- Install custom tools
-- Change the base image
-- Modify the entrypoint behavior
-
-After making changes, rebuild with:
-```bash
-occ --rebuild
-```
-
-### Config Directory Structure
+Configuration is stored in `~/.config/occ/`:
 
 ```
 ~/.config/occ/
-├── Dockerfile      # Container image definition
-└── .gitignore      # Ignores *.key, tailscale-*, .env
+├── config.toml      # Main configuration file
+└── Dockerfile       # Container image definition
 ```
+
+On first run, default configuration files are automatically created.
+
+### config.toml
+
+```toml
+[container]
+stop_on_exit = true      # Auto-stop container when shell exits
+shell = "/bin/bash"      # Shell to use in container
+
+[mounts]
+# Extra mounts (in addition to project mount)
+extra = []
+
+[env]
+# Environment variables to pass through from host
+allowlist = [
+    "LANG",
+    "LC_ALL",
+    "EDITOR",
+    "TERM",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "GITHUB_TOKEN",
+    "GH_TOKEN",
+]
+
+# Load .env file from project directory
+load_dotenv = true
+```
+
+### Customizing the Dockerfile
+
+Edit `~/.config/occ/Dockerfile` to customize the container image:
+
+```bash
+occ config edit    # Opens config.toml (edit Dockerfile directly)
+# or
+$EDITOR ~/.config/occ/Dockerfile
+```
+
+After making changes, the next `occ run` will automatically detect the change and rebuild.
+
+### Environment Variable Priority
+
+Environment variables are collected in this order (later overrides earlier):
+
+1. Host allowlist (from config.toml)
+2. CLI `--env` flags
+3. Project `.env` file
+4. Implicit vars (`HOST_UID`, `HOST_GID`)
+
+## How It Works
+
+1. **First Run**: Creates `~/.config/occ/` with default Dockerfile and config
+2. **Image Build**: Builds Docker image from `~/.config/occ/Dockerfile`
+3. **Container Creation**: Creates container with project mounted at `/workspace`
+4. **Shell Attach**: Attaches interactive shell to the container
+5. **Cleanup**: Stops and removes container on exit (unless `--keep-alive`)
+
+Container names are derived from project paths (e.g., `occ-myproject`).
 
 ## Troubleshooting
 
-### No container runtime found
+### Docker not running
 
-**Error:** `Error: No container runtime found. Install Docker or the Apple 'container' CLI.`
+```
+Error: Docker is not running. Please start Docker and try again.
+```
 
-**Solution:** Install Docker Desktop or ensure the Apple container CLI is available (macOS 26+). Alternatively, set `OCC_RUNTIME` to specify a runtime path.
+Start Docker Desktop or the Docker daemon.
 
-### TS_AUTHKEY not set
+### Project path does not exist
 
-**Error:** `Tailscale skipped (no TS_AUTHKEY set)`
+```
+Error: Project path does not exist: /path/to/project
+```
 
-**Solution:** Either:
-1. Export your Tailscale auth key: `export TS_AUTHKEY="tskey-auth-xxxxx"`
-2. Use `--no-tailscale` to skip Tailscale setup entirely
+Verify the path exists and is spelled correctly.
 
-### OpenCode config directory not found
+### Container already running
 
-**Error:** `Error: OpenCode config directory not found: ~/.config/opencode`
+When running `occ run` for a project that has a running container, you'll be prompted:
 
-**Solution:** Install and configure OpenCode first:
+```
+Container is running. [A]ttach / [R]estart / [C]ancel?
+```
+
+- **A** - Attach to the existing container
+- **R** - Stop and recreate the container
+- **C** - Cancel
+
+### Reset to defaults
+
+If configuration gets corrupted:
+
 ```bash
-curl -fsSL https://opencode.ai/install | bash
+occ config reset
 ```
-
-### Project path doesn't exist
-
-**Error:** `Error: Project path does not exist: /path/to/project`
-
-**Solution:** Verify the path exists and is spelled correctly. Use absolute or relative paths.
-
-### Project path is not a directory
-
-**Error:** `Error: Project path is not a directory: /path/to/file`
-
-**Solution:** Provide a directory path, not a file path.
-
-### Image build fails
-
-**Error:** `Error: Image build failed!`
-
-**Solution:**
-1. Check the build output for specific errors
-2. Ensure you have internet connectivity (for package downloads)
-3. Try rebuilding: `occ --rebuild`
-4. Check available disk space
-
-### Tailscale connection timeout
-
-**Error:** `ERROR: Tailscale connection timeout after 30s`
-
-**Solution:**
-1. Verify your `TS_AUTHKEY` is valid and not expired
-2. Check your Tailscale account status
-3. Ensure no network/firewall is blocking Tailscale
-4. Try generating a new auth key from the Tailscale admin console
-
-### Malformed .env file
-
-**Warning:** `Warning: Malformed line X in .env, skipping: ...`
-
-**Solution:** Ensure your `.env` file follows the format:
-```
-KEY=value
-# Comments start with #
-```
-No shell expansion, quotes, or multiline values are supported.
-
-### Wrong file ownership in mounted directories
-
-**Problem:** Files created in `/workspace` have wrong ownership on host.
-
-**Solution:** This should be handled automatically via `HOST_UID`/`HOST_GID`. If issues persist:
-1. Check that your user's UID/GID are being passed correctly (`OCC_DEBUG=1 occ ...`)
-2. Ensure the entrypoint is running properly
-
-## Architecture
-
-### Overview
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Host (macOS)                                               │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  occ CLI                                             │   │
-│  │  • Argument parsing                                  │   │
-│  │  • Runtime detection (Docker / Apple container)     │   │
-│  │  • Environment variable collection                  │   │
-│  │  • Image build orchestration                        │   │
-│  │  • Container launch                                 │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                           │                                 │
-│                           ▼                                 │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  Container (occ-workspace)                          │   │
-│  │  ┌───────────────────────────────────────────────┐  │   │
-│  │  │  /entrypoint.sh                               │  │   │
-│  │  │  • User UID/GID mapping                       │  │   │
-│  │  │  • Tailscale setup (optional)                 │  │   │
-│  │  │  • Exec as user                               │  │   │
-│  │  └───────────────────────────────────────────────┘  │   │
-│  │                                                      │   │
-│  │  Mounts:                                            │   │
-│  │  • ~/.config/opencode → /home/user/.config/opencode │   │
-│  │  • PROJECT_PATH → /workspace                        │   │
-│  │                                                      │   │
-│  │  Tools: opencode, git, nvim, tmux, node, python,   │   │
-│  │         mise, uv, tailscale, ripgrep, fzf, jq, yq  │   │
-│  └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Components
-
-| Component | Location (source) | Location (installed) | Purpose |
-|-----------|------------------|---------------------|---------|
-| `Dockerfile` | `./Dockerfile` | `~/.config/occ/Dockerfile` | Wolfi-based image definition |
-| `occ` | `./occ` | `~/.local/bin/occ` | Main CLI script |
-| `install.sh` | `./install.sh` | N/A (run once) | One-time installer |
-
-### Container Image
-
-- **Base:** `cgr.dev/chainguard/wolfi-base:latest` (glibc-based minimal Linux)
-- **Multi-arch:** Supports both `linux/arm64` and `linux/amd64`
-- **Ephemeral:** Containers run with `--rm` flag; destroyed on exit
-
-### Runtime Abstraction
-
-`occ` supports both Docker and Apple's container CLI through runtime-agnostic helper functions:
-
-| Operation | Apple `container` CLI | Docker |
-|-----------|----------------------|--------|
-| Build | `container build --tag NAME .` | `docker build -t NAME .` |
-| Run | `container run --rm -it ...` | `docker run --rm -it ...` |
-| Mount | `--mount type=bind,src=X,dst=Y` | `-v X:Y` |
-| List | `container list` | `docker ps` |
-
-For detailed architecture information, see `prd.md`.
-
-## Security Considerations
-
-- **Allowlist-only env passthrough:** Only explicitly allowed variables are passed to the container
-- **Readonly config mount:** OpenCode config is mounted read-only
-- **Ephemeral containers:** No persistent state; clean environment every run
-- **No SSH/git config mount:** Minimizes host exposure (v1 limitation)
-- **Host-side .env parsing:** `.env` files are parsed on the host; only key-value pairs are passed as flags
 
 ## License
 

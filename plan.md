@@ -729,35 +729,35 @@ echo "=== Phase 4 PASSED ==="
 
 ### Tasks
 
-- [ ] Test complete first-run experience:
+- [x] Test complete first-run experience:
   - Fresh system (no `~/.config/occ`)
   - Run `occ ~/Code/project`
   - Verify config initialization message
   - Verify image build
   - Verify container starts
   - Verify shell attaches
-- [ ] Test Dockerfile modification workflow:
+- [x] Test Dockerfile modification workflow:
   - Modify `~/.config/occ/Dockerfile`
   - Run `occ project`
   - Verify "Dockerfile changed, rebuilding..." message
   - Verify image rebuilds
-- [ ] Test multiple concurrent containers:
+- [x] Test multiple concurrent containers:
   - Launch `occ ~/project-a`
   - Launch `occ ~/project-b` (in another terminal)
   - Verify both appear in `occ status`
   - Verify separate containers with correct names
-- [ ] Test container already running workflow:
+- [x] Test container already running workflow:
   - Start container with `occ project`
   - Exit shell
   - Run `occ project` again with `--keep-alive` first time
   - Verify prompt appears
-- [ ] Test all error scenarios:
+- [x] Test all error scenarios:
   - Docker not running
   - Invalid project path
   - Permission issues (if testable)
-- [ ] Clean up old bash `occ` script and `install.sh` if they exist
-- [ ] Verify `uv tool install .` works from package directory
-- [ ] Update README with installation and usage instructions
+- [x] Clean up old bash `occ` script and `install.sh` if they exist
+- [x] Verify `uv tool install .` works from package directory
+- [x] Update README with installation and usage instructions
 
 ### Verification Script
 

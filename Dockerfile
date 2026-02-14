@@ -28,7 +28,6 @@ RUN apk update && apk add --no-cache \
     python3 \
     build-base \
     gosu \
-    gcompat \
     && rm -rf /var/cache/apk/*
 
 # Install Tailscale (architecture-aware)
@@ -101,12 +100,12 @@ HOMEDIR="/home/${USERNAME}"
 
 # Get current UID/GID
 CURRENT_UID=$(id -u "${USERNAME}" 2>/dev/null || echo "0")
-CURRENT_GID=$(getent group "${USERNAME}" | cut -d: -f3 || echo "0")
+CURRENT_GID=$(grep "^${USERNAME}:" /etc/group | cut -d: -f3 || echo "0")
 
 # Modify group if GID differs
 if [ "${CURRENT_GID}" != "${HOST_GID}" ]; then
     # Check if a group with HOST_GID already exists
-    EXISTING_GROUP=$(getent group "${HOST_GID}" | cut -d: -f1 || true)
+    EXISTING_GROUP=$(grep ":${HOST_GID}:" /etc/group | cut -d: -f1 || true)
     if [ -n "${EXISTING_GROUP}" ] && [ "${EXISTING_GROUP}" != "${USERNAME}" ]; then
         groupmod -g 9999 "${EXISTING_GROUP}" 2>/dev/null || true
     fi
@@ -116,7 +115,7 @@ fi
 # Modify user if UID differs
 if [ "${CURRENT_UID}" != "${HOST_UID}" ]; then
     # Check if a user with HOST_UID already exists
-    EXISTING_USER=$(getent passwd "${HOST_UID}" | cut -d: -f1 || true)
+    EXISTING_USER=$(grep ":x:${HOST_UID}:" /etc/passwd | cut -d: -f1 || true)
     if [ -n "${EXISTING_USER}" ] && [ "${EXISTING_USER}" != "${USERNAME}" ]; then
         usermod -u 9999 "${EXISTING_USER}" 2>/dev/null || true
     fi
