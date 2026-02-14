@@ -440,7 +440,7 @@ echo "Phase 6: PASS"
 
 ### Tasks
 
-- [ ] Write `test/integration.sh` that performs the full PRD §10 manual checklist automatically:
+- [x] Write `test/integration.sh` that performs the full PRD §10 manual checklist automatically:
   1. Run `install.sh` in an isolated `$HOME`
   2. Verify `occ --help` works from installed path
   3. Build the image (`occ --rebuild --no-tailscale`)
@@ -452,9 +452,9 @@ echo "Phase 6: PASS"
   9. Verify `occ config` output
   10. Verify `--no-tailscale` skips Tailscale (no `TS_AUTHKEY` required)
   11. Clean up: remove test image and temp dirs
-- [ ] Ensure the script exits non-zero on any failure with clear output identifying which test failed
-- [ ] Run the integration test and fix any issues found
-- [ ] Re-run until all tests pass
+- [x] Ensure the script exits non-zero on any failure with clear output identifying which test failed
+- [x] Run the integration test and fix any issues found
+- [x] Re-run until all tests pass
 
 ### Verification
 
