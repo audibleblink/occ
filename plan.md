@@ -341,7 +341,7 @@ echo "=== Phase 2 PASSED ==="
 
 ### Tasks
 
-- [ ] Implement `docker.py` with:
+- [x] Implement `docker.py` with:
   - `check_docker_available()` - verify Docker daemon is running
   - `build_image(dockerfile_path, tag="occ:latest", verbose=False)` - build image
   - `image_exists(tag="occ:latest")` - check if image exists
@@ -354,15 +354,15 @@ echo "=== Phase 2 PASSED ==="
   - `get_container_status(name)` - return running/stopped/not-found
   - `cleanup_dangling_images()` - remove old untagged occ images
   - `sanitize_container_name(project_path)` - convert path to valid name
-- [ ] Implement mount point assembly:
+- [x] Implement mount point assembly:
   - Default mounts (project, opencode configs)
   - Extra mounts from config.toml
   - Path expansion for `~`
-- [ ] Implement proper error handling:
+- [x] Implement proper error handling:
   - Docker not running → helpful error message
   - Permission denied → suggest docker group / Docker Desktop
   - Image build failure → show build logs
-- [ ] Implement build progress output (single updating line for default, full for verbose)
+- [x] Implement build progress output (single updating line for default, full for verbose)
 
 ### Verification Script
 
