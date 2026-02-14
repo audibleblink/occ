@@ -396,13 +396,13 @@ echo "Phase 5: PASS"
 
 ### Tasks
 
-- [ ] Write Overview section (what `occ` is, what it does)
-- [ ] Write Requirements section (macOS, Docker or Apple container CLI, Tailscale, OpenCode config)
-- [ ] Write Installation section (clone, run `install.sh`, verify PATH)
-- [ ] Write Usage section with examples for all commands and flags
-- [ ] Write Configuration section (env vars, `.env` file, allowlist, `OCC_RUNTIME`)
-- [ ] Write Troubleshooting section (common errors from PRD §8, how to resolve)
-- [ ] Write Architecture section (brief, link to PRD for details)
+- [x] Write Overview section (what `occ` is, what it does)
+- [x] Write Requirements section (macOS, Docker or Apple container CLI, Tailscale, OpenCode config)
+- [x] Write Installation section (clone, run `install.sh`, verify PATH)
+- [x] Write Usage section with examples for all commands and flags
+- [x] Write Configuration section (env vars, `.env` file, allowlist, `OCC_RUNTIME`)
+- [x] Write Troubleshooting section (common errors from PRD §8, how to resolve)
+- [x] Write Architecture section (brief, link to PRD for details)
 
 ### Verification
 
