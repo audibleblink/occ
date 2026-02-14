@@ -47,6 +47,33 @@ To fix this:
 """
 
 
+def _find_docker_socket() -> str | None:
+    """Find the Docker socket path.
+
+    Checks common locations for Docker socket including:
+    - Default /var/run/docker.sock
+    - Colima socket at ~/.config/colima/default/docker.sock
+    - Docker Desktop socket at ~/.docker/run/docker.sock
+
+    Returns:
+        Socket URL if found, None otherwise.
+    """
+    import os
+
+    socket_paths = [
+        "/var/run/docker.sock",
+        str(Path.home() / ".config" / "colima" / "default" / "docker.sock"),
+        str(Path.home() / ".docker" / "run" / "docker.sock"),
+        str(Path.home() / ".colima" / "default" / "docker.sock"),
+    ]
+
+    for socket_path in socket_paths:
+        if Path(socket_path).exists():
+            return f"unix://{socket_path}"
+
+    return None
+
+
 def get_client() -> DockerClient:
     """Get Docker client, raise helpful error if Docker not available.
 
@@ -56,9 +83,32 @@ def get_client() -> DockerClient:
     Raises:
         SystemExit: If Docker daemon is not running or permission denied.
     """
+    import os
+
+    # First try from environment
     try:
         client = docker.from_env()
-        # Test connection
+        client.ping()
+        return client
+    except DockerException:
+        pass
+
+    # Try to find socket and connect directly
+    socket_url = _find_docker_socket()
+    if socket_url:
+        try:
+            client = docker.DockerClient(base_url=socket_url)
+            client.ping()
+            # Set DOCKER_HOST for subprocess calls (like docker exec)
+            os.environ["DOCKER_HOST"] = socket_url
+            return client
+        except DockerException:
+            pass
+
+    # If we get here, Docker is not available
+    # Try one more time to get a more specific error
+    try:
+        client = docker.from_env()
         client.ping()
         return client
     except DockerException as e:
@@ -80,12 +130,29 @@ def check_docker_available() -> bool:
     Returns:
         True if Docker is available and running, False otherwise.
     """
+    import os
+
+    # First try from environment
     try:
         client = docker.from_env()
         client.ping()
         return True
     except DockerException:
-        return False
+        pass
+
+    # Try to find socket and connect directly
+    socket_url = _find_docker_socket()
+    if socket_url:
+        try:
+            client = docker.DockerClient(base_url=socket_url)
+            client.ping()
+            # Set DOCKER_HOST for subprocess calls (like docker exec)
+            os.environ["DOCKER_HOST"] = socket_url
+            return True
+        except DockerException:
+            pass
+
+    return False
 
 
 def build_image(

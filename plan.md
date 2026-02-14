@@ -515,7 +515,7 @@ echo "=== Phase 3 PASSED ==="
 
 ### Tasks
 
-- [ ] Implement main command `occ [OPTIONS] [PROJECT_PATH]`:
+- [x] Implement main command `occ [OPTIONS] [PROJECT_PATH]`:
   - Resolve project path (default to current directory)
   - Validate project path exists
   - Auto-initialize config on first run
@@ -525,27 +525,27 @@ echo "=== Phase 3 PASSED ==="
   - Create and start container with proper mounts and env vars
   - Attach interactive shell
   - Handle `--keep-alive` flag (don't stop on exit)
-- [ ] Implement `--rebuild` flag
-- [ ] Implement `--env VAR=value` flag (repeatable)
-- [ ] Implement `--keep-alive` flag
-- [ ] Implement `-v/--verbose` flag
-- [ ] Implement `-q/--quiet` flag
-- [ ] Implement `env.py`:
+- [x] Implement `--rebuild` flag
+- [x] Implement `--env VAR=value` flag (repeatable)
+- [x] Implement `--keep-alive` flag
+- [x] Implement `-v/--verbose` flag
+- [x] Implement `-q/--quiet` flag
+- [x] Implement `env.py`:
   - `collect_env_vars(project_path, cli_env, config)` - merge env vars by priority
   - Load from host env (allowlist)
   - Load from project `.env` file
   - Add CLI `--env` overrides
-- [ ] Implement subcommands:
+- [x] Implement subcommands:
   - `occ status` - table of running containers
   - `occ shell [PROJECT]` - attach to running container
   - `occ stop [PROJECT]` - stop container
   - `occ stop --all` - stop all occ containers
-- [ ] Implement interactive prompt for running container:
+- [x] Implement interactive prompt for running container:
   - "[A]ttach / [R]estart / [C]ancel?"
-- [ ] Implement output formatting:
-  - Status table with columns: NAME, PROJECT, IMAGE HASH, UPTIME
+- [x] Implement output formatting:
+  - Status table with columns: NAME, PROJECT, STATUS, UPTIME
   - Build progress (updating single line in default mode)
-- [ ] Handle all error cases with user-friendly messages
+- [x] Handle all error cases with user-friendly messages
 
 ### Verification Script
 
