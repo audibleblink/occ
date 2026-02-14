@@ -41,23 +41,23 @@ git rev-parse --git-dir >/dev/null 2>&1 || { echo "Not a git repo"; fail=1; }
 
 ### Tasks
 
-- [ ] Write `Dockerfile` using `cgr.dev/chainguard/wolfi-base:latest` as base
-- [ ] Install system packages via `apk`: `bash`, `coreutils`, `shadow`, `sudo`, `ca-certificates`, `curl`, `wget`, `git`, `neovim`, `zsh`, `tmux`, `jq`, `ripgrep`, `fzf`, `nodejs`, `npm`, `python3`, `build-base`
-- [ ] Install GitHub-release tools with `TARGETARCH` detection:
+- [x] Write `Dockerfile` using `cgr.dev/chainguard/wolfi-base:latest` as base
+- [x] Install system packages via `apk`: `bash`, `coreutils`, `shadow`, `sudo`, `ca-certificates`, `curl`, `wget`, `git`, `neovim`, `zsh`, `tmux`, `jq`, `ripgrep`, `fzf`, `nodejs`, `npm`, `python3`, `build-base`
+- [x] Install GitHub-release tools with `TARGETARCH` detection:
   - `tailscale` + `tailscaled` from `pkgs.tailscale.com`
   - `opencode` via install script
   - `mise` via install script
   - `uv` via install script
   - `yq` from GitHub releases
-- [ ] Create a default non-root placeholder user (e.g., `user` with UID 1000)
-- [ ] Write `/entrypoint.sh` inline (or `COPY`) that:
+- [x] Create a default non-root placeholder user (e.g., `user` with UID 1000)
+- [x] Write `/entrypoint.sh` inline (or `COPY`) that:
   1. Reads `HOST_UID` and `HOST_GID` env vars
   2. Creates/modifies the `user` account to match those IDs
   3. Fixes ownership on `/home/user`
   4. Conditionally starts Tailscale (if `TS_AUTHKEY` set and `NO_TAILSCALE` is not `1`), with a 30 s timeout and hard fail
   5. Execs the provided command as the created user via `exec gosu user "$@"` or `exec su-exec` / `sudo -u`
-- [ ] Set `ENTRYPOINT ["/entrypoint.sh"]` and `CMD ["/bin/bash"]`
-- [ ] Ensure the image works for both `linux/arm64` and `linux/amd64`
+- [x] Set `ENTRYPOINT ["/entrypoint.sh"]` and `CMD ["/bin/bash"]`
+- [x] Ensure the image works for both `linux/arm64` and `linux/amd64`
 
 ### Verification
 
