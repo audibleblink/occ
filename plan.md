@@ -341,15 +341,15 @@ echo "Phase 4: PASS"
 
 ### Tasks
 
-- [ ] Verify script is run from the source directory (check `Dockerfile` and `occ` exist in cwd)
-- [ ] Create `~/.config/occ/` directory
-- [ ] Copy `./Dockerfile` → `~/.config/occ/Dockerfile`
-- [ ] Create `~/.config/occ/.gitignore` with patterns: `*.key`, `tailscale-*`, `.env`
-- [ ] Create `~/.local/bin/` if it doesn't exist
-- [ ] Copy `./occ` → `~/.local/bin/occ`
-- [ ] `chmod +x ~/.local/bin/occ`
-- [ ] Check if `~/.local/bin` is in `$PATH`; warn if not
-- [ ] Print the post-install message (PRD §6.3)
+- [x] Verify script is run from the source directory (check `Dockerfile` and `occ` exist in cwd)
+- [x] Create `~/.config/occ/` directory
+- [x] Copy `./Dockerfile` → `~/.config/occ/Dockerfile`
+- [x] Create `~/.config/occ/.gitignore` with patterns: `*.key`, `tailscale-*`, `.env`
+- [x] Create `~/.local/bin/` if it doesn't exist
+- [x] Copy `./occ` → `~/.local/bin/occ`
+- [x] `chmod +x ~/.local/bin/occ`
+- [x] Check if `~/.local/bin` is in `$PATH`; warn if not
+- [x] Print the post-install message (PRD §6.3)
 
 ### Verification
 
