@@ -250,13 +250,13 @@ echo "Phase 3: PASS"
 
 ### Tasks
 
-- [ ] Implement `ensure_image()`:
+- [x] Implement `ensure_image()`:
   - Check if `occ-workspace:latest` image exists (runtime-specific check)
   - If missing or `--rebuild` passed, build from `~/.config/occ/Dockerfile` with context `~/.config/occ/`
   - `--rebuild` passes `--no-cache`
   - Stream build output to terminal
   - Abort on build failure with clear error
-- [ ] Implement `launch_container()`:
+- [x] Implement `launch_container()`:
   - Generate container name: `occ-workspace-$(date +%Y%m%d-%H%M%S)`
   - Always pass `--rm -it`
   - Attach collected env var flags
@@ -264,13 +264,13 @@ echo "Phase 3: PASS"
   - If `PROJECT_PATH` provided: mount at `/workspace`, set working dir to `/workspace`, command = `opencode`
   - If no `PROJECT_PATH`: command = `/bin/bash`
   - Use runtime-abstracted helper functions for mount syntax
-- [ ] Implement `status` subcommand:
+- [x] Implement `status` subcommand:
   - List containers filtered by `occ-workspace-*` name prefix
   - Show name, runtime, uptime, and mounted project path
-- [ ] Implement `config` subcommand:
+- [x] Implement `config` subcommand:
   - Print `~/.config/occ/` path and list contents
   - If `$EDITOR` is set, offer to open the directory
-- [ ] Wire everything together in `main()` flow:
+- [x] Wire everything together in `main()` flow:
   1. Parse args
   2. Detect runtime
   3. Validate inputs

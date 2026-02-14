@@ -136,21 +136,23 @@ rt_run() {
 }
 
 # rt_mount - Format mount argument
-# Args: $1 = source, $2 = destination, $3 = options (optional, e.g., "ro")
+# Args: $1 = source, $2 = destination, $3 = "readonly" for read-only mount (optional)
 rt_mount() {
   local src="$1"
   local dst="$2"
-  local opts="${3:-}"
+  local readonly_flag="${3:-}"
 
   if [[ "$RUNTIME" == "container" ]]; then
-    if [[ -n "$opts" ]]; then
-      echo "--mount type=bind,src=$src,dst=$dst,$opts"
+    # Apple container CLI uses: --mount type=bind,src=X,dst=Y,readonly
+    if [[ "$readonly_flag" == "readonly" ]]; then
+      echo "--mount type=bind,src=$src,dst=$dst,readonly"
     else
       echo "--mount type=bind,src=$src,dst=$dst"
     fi
   else
-    if [[ -n "$opts" ]]; then
-      echo "-v $src:$dst:$opts"
+    # Docker uses: -v src:dst:ro
+    if [[ "$readonly_flag" == "readonly" ]]; then
+      echo "-v $src:$dst:ro"
     else
       echo "-v $src:$dst"
     fi
@@ -298,6 +300,117 @@ debug_print_env() {
 }
 
 # ============================================================================
+# Image Management
+# ============================================================================
+
+# ensure_image - Build or verify the occ-workspace image exists
+# Args: $1 = "true" if --rebuild was passed
+ensure_image() {
+  local rebuild="$1"
+  local dockerfile_path="$CONFIG_DIR/Dockerfile"
+  
+  # Check if Dockerfile exists
+  if [[ ! -f "$dockerfile_path" ]]; then
+    echo "Error: Dockerfile not found at $dockerfile_path" >&2
+    echo "Please run 'install.sh' first or create the Dockerfile manually." >&2
+    exit 1
+  fi
+  
+  # Check if image exists (unless --rebuild forces a build)
+  local needs_build=false
+  
+  if [[ "$rebuild" == "true" ]]; then
+    echo "Rebuild requested, forcing image build..."
+    needs_build=true
+  elif ! rt_image_exists "$IMAGE_NAME"; then
+    echo "Image $IMAGE_NAME not found, building..."
+    needs_build=true
+  fi
+  
+  if [[ "$needs_build" == "true" ]]; then
+    echo "Building image $IMAGE_NAME from $CONFIG_DIR..."
+    echo ""
+    
+    local nocache_flag=""
+    if [[ "$rebuild" == "true" ]]; then
+      nocache_flag="--no-cache"
+    fi
+    
+    # Build the image (streams output to terminal)
+    if ! rt_build "$IMAGE_NAME" "$CONFIG_DIR" "$nocache_flag"; then
+      echo "" >&2
+      echo "Error: Image build failed!" >&2
+      echo "Check the build output above for details." >&2
+      exit 1
+    fi
+    
+    echo ""
+    echo "Image $IMAGE_NAME built successfully."
+  fi
+}
+
+# ============================================================================
+# Container Launch
+# ============================================================================
+
+# launch_container - Start the container with appropriate mounts and env vars
+# Args: $1 = project_path (can be empty)
+launch_container() {
+  local project_path="$1"
+  
+  # Generate unique container name
+  local container_name="occ-workspace-$(date +%Y%m%d-%H%M%S)"
+  
+  # Build the run command arguments
+  local -a run_args=()
+  run_args+=("--name" "$container_name")
+  
+  # Add environment variables
+  local -a env_flags
+  mapfile -t env_flags < <(build_env_array)
+  run_args+=("${env_flags[@]}")
+  
+  # Mount opencode config (readonly)
+  local opencode_mount
+  opencode_mount=$(rt_mount "$OPENCODE_CONFIG_DIR" "/home/user/.config/opencode" "readonly")
+  # Split the mount string into args (handles both -v and --mount formats)
+  read -ra mount_args <<< "$opencode_mount"
+  run_args+=("${mount_args[@]}")
+  
+  # If project path provided, mount it and set working dir
+  if [[ -n "$project_path" ]]; then
+    local project_mount
+    project_mount=$(rt_mount "$project_path" "/workspace")
+    read -ra project_mount_args <<< "$project_mount"
+    run_args+=("${project_mount_args[@]}")
+    run_args+=("-w" "/workspace")
+  fi
+  
+  # Add the image name
+  run_args+=("$IMAGE_NAME")
+  
+  # Add the command
+  if [[ -n "$project_path" ]]; then
+    run_args+=("opencode")
+  else
+    run_args+=("/bin/bash")
+  fi
+  
+  # Debug output
+  if [[ "${OCC_DEBUG:-}" == "1" ]]; then
+    echo "=== Container Launch ===" >&2
+    echo "  Name: $container_name" >&2
+    echo "  Runtime: $RUNTIME" >&2
+    echo "  Project: ${project_path:-<none>}" >&2
+    echo "  Command: ${run_args[*]}" >&2
+    echo "========================" >&2
+  fi
+  
+  # Launch the container
+  rt_run "${run_args[@]}"
+}
+
+# ============================================================================
 # Subcommands
 # ============================================================================
 
@@ -305,10 +418,27 @@ cmd_status() {
   detect_runtime
   echo "Running occ containers (runtime: $RUNTIME):"
   echo ""
+  
   if [[ "$RUNTIME" == "container" ]]; then
-    container list --filter "name=occ-workspace-*" 2>/dev/null || container list 2>/dev/null || echo "(none)"
+    # Apple container CLI - filter manually
+    local output
+    output=$(container list 2>/dev/null || true)
+    if [[ -n "$output" ]]; then
+      # Print header if there's output
+      echo "$output" | head -1
+      echo "$output" | grep "occ-workspace-" || echo "(no occ containers running)"
+    else
+      echo "(no containers running)"
+    fi
   else
-    docker ps --filter "name=occ-workspace-" 2>/dev/null || echo "(none)"
+    # Docker - use filter
+    local output
+    output=$(docker ps --filter "name=occ-workspace-" --format "table {{.Names}}\t{{.Status}}\t{{.Mounts}}" 2>/dev/null || true)
+    if [[ -n "$output" && $(echo "$output" | wc -l) -gt 1 ]]; then
+      echo "$output"
+    else
+      echo "(no occ containers running)"
+    fi
   fi
   exit 0
 }
@@ -316,11 +446,23 @@ cmd_status() {
 cmd_config() {
   echo "OCC config directory: $CONFIG_DIR"
   echo ""
+  
   if [[ -d "$CONFIG_DIR" ]]; then
     echo "Contents:"
     ls -la "$CONFIG_DIR" 2>/dev/null || echo "(empty)"
+    echo ""
+    
+    # Offer to open in editor
+    if [[ -n "${EDITOR:-}" ]]; then
+      echo "To edit configuration:"
+      echo "  $EDITOR $CONFIG_DIR"
+    else
+      echo "Tip: Set \$EDITOR to quickly open the config directory."
+    fi
   else
     echo "(directory does not exist yet)"
+    echo ""
+    echo "Run 'install.sh' to create the config directory with default files."
   fi
   exit 0
 }
@@ -457,14 +599,15 @@ main() {
   # Debug print if requested
   debug_print_env
   
-  # ---- STUB: Actual build/launch would happen here ----
-  echo "Would launch container with:"
-  echo "  Runtime: $RUNTIME"
-  echo "  Rebuild: $rebuild"
-  echo "  No Tailscale: $no_tailscale"
-  echo "  Project Path: ${project_path:-<none>}"
-  echo "  Extra Env Vars: ${env_vars[*]:-<none>}"
-  exit 0
+  # ============================================================================
+  # Build/Launch Container
+  # ============================================================================
+  
+  # Ensure the image is built
+  ensure_image "$rebuild"
+  
+  # Launch the container
+  launch_container "$project_path"
 }
 
 main "$@"
