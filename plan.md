@@ -106,29 +106,29 @@ echo "Phase 1: PASS"
 
 ### Tasks
 
-- [ ] Write `occ` as a bash script with `set -euo pipefail`
-- [ ] Implement `--help` flag that prints the usage block from PRD §6.3
-- [ ] Implement argument parser supporting:
+- [x] Write `occ` as a bash script with `set -euo pipefail`
+- [x] Implement `--help` flag that prints the usage block from PRD §6.3
+- [x] Implement argument parser supporting:
   - `--rebuild`
   - `--env VAR` (repeatable)
   - `--no-tailscale`
   - `--help`
   - Positional `PROJECT_PATH`
   - Subcommands: `status`, `config`
-- [ ] Implement runtime detection logic (PRD §4.5):
+- [x] Implement runtime detection logic (PRD §4.5):
   1. Check `OCC_RUNTIME` env var
   2. Check for `container` in PATH
   3. Fall back to `docker`
   4. Error if neither found
-- [ ] Create helper functions that abstract runtime differences:
+- [x] Create helper functions that abstract runtime differences:
   - `rt_build` — build image
   - `rt_run` — run container
   - `rt_mount` — format mount argument
   - `rt_list` — list containers
   - `rt_rmi` — remove image
-- [ ] Validate `PROJECT_PATH` (exists, is directory) when provided
-- [ ] Check that `~/.config/opencode` exists (exit 1 if not)
-- [ ] Exit with stubs for actual image build / container launch (print "would launch" and exit 0)
+- [x] Validate `PROJECT_PATH` (exists, is directory) when provided
+- [x] Check that `~/.config/opencode` exists (exit 1 if not)
+- [x] Exit with stubs for actual image build / container launch (print "would launch" and exit 0)
 
 ### Verification
 

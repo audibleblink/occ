@@ -1,0 +1,319 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# occ - OpenCode Container
+# Launches ephemeral Tailscale-connected dev containers
+
+# ============================================================================
+# Configuration
+# ============================================================================
+
+IMAGE_NAME="occ-workspace:latest"
+CONFIG_DIR="${HOME}/.config/occ"
+OPENCODE_CONFIG_DIR="${HOME}/.config/opencode"
+
+# ============================================================================
+# Usage / Help
+# ============================================================================
+
+usage() {
+  cat <<'EOF'
+occ - OpenCode Container
+
+Usage:
+  occ [OPTIONS] [PROJECT_PATH]
+
+Arguments:
+  PROJECT_PATH    Path to project directory (mounted at /workspace)
+
+Options:
+  --rebuild       Force rebuild of the container image
+  --env VAR       Pass additional environment variable (repeatable)
+  --no-tailscale  Skip Tailscale setup in the container
+  --help          Print this help message
+
+Subcommands:
+  occ status      List running occ containers
+  occ config      Show config directory
+
+Examples:
+  occ                         Start bash in container
+  occ ~/Code/project          Start OpenCode in project
+  occ --rebuild               Rebuild container image
+  occ --env MY_VAR ~/proj     Pass additional env var
+  occ --no-tailscale          Run without Tailscale
+EOF
+}
+
+# ============================================================================
+# Runtime Detection
+# ============================================================================
+
+RUNTIME=""
+
+detect_runtime() {
+  # 1. Check OCC_RUNTIME env var first
+  if [[ -n "${OCC_RUNTIME:-}" ]]; then
+    if command -v "$OCC_RUNTIME" &>/dev/null; then
+      RUNTIME="$OCC_RUNTIME"
+      return 0
+    else
+      echo "Error: OCC_RUNTIME='$OCC_RUNTIME' is set but not found in PATH" >&2
+      exit 1
+    fi
+  fi
+
+  # 2. Check for Apple 'container' binary
+  if command -v container &>/dev/null; then
+    RUNTIME="container"
+    return 0
+  fi
+
+  # 3. Fall back to docker
+  if command -v docker &>/dev/null; then
+    RUNTIME="docker"
+    return 0
+  fi
+
+  # 4. Error if neither found
+  echo "Error: No container runtime found. Install Docker or the Apple 'container' CLI." >&2
+  echo "Alternatively, set OCC_RUNTIME to specify a runtime." >&2
+  exit 1
+}
+
+# ============================================================================
+# Runtime Abstraction Helpers
+# ============================================================================
+
+# rt_build - Build an image
+# Args: $1 = tag name, $2 = context directory
+rt_build() {
+  local tag="$1"
+  local context="$2"
+  local nocache="${3:-}"
+
+  if [[ "$RUNTIME" == "container" ]]; then
+    if [[ "$nocache" == "--no-cache" ]]; then
+      container build --no-cache --tag "$tag" "$context"
+    else
+      container build --tag "$tag" "$context"
+    fi
+  else
+    if [[ "$nocache" == "--no-cache" ]]; then
+      docker build --no-cache -t "$tag" "$context"
+    else
+      docker build -t "$tag" "$context"
+    fi
+  fi
+}
+
+# rt_run - Run a container
+# Args: $@ = all arguments to pass to run command
+rt_run() {
+  if [[ "$RUNTIME" == "container" ]]; then
+    container run --rm -it "$@"
+  else
+    docker run --rm -it "$@"
+  fi
+}
+
+# rt_mount - Format mount argument
+# Args: $1 = source, $2 = destination, $3 = options (optional, e.g., "ro")
+rt_mount() {
+  local src="$1"
+  local dst="$2"
+  local opts="${3:-}"
+
+  if [[ "$RUNTIME" == "container" ]]; then
+    if [[ -n "$opts" ]]; then
+      echo "--mount type=bind,src=$src,dst=$dst,$opts"
+    else
+      echo "--mount type=bind,src=$src,dst=$dst"
+    fi
+  else
+    if [[ -n "$opts" ]]; then
+      echo "-v $src:$dst:$opts"
+    else
+      echo "-v $src:$dst"
+    fi
+  fi
+}
+
+# rt_list - List containers
+# Args: $@ = optional filter args
+rt_list() {
+  if [[ "$RUNTIME" == "container" ]]; then
+    container list "$@"
+  else
+    docker ps "$@"
+  fi
+}
+
+# rt_rmi - Remove an image
+# Args: $1 = image name
+rt_rmi() {
+  local image="$1"
+
+  if [[ "$RUNTIME" == "container" ]]; then
+    container image remove "$image"
+  else
+    docker rmi "$image"
+  fi
+}
+
+# rt_image_exists - Check if an image exists
+# Args: $1 = image name
+rt_image_exists() {
+  local image="$1"
+
+  if [[ "$RUNTIME" == "container" ]]; then
+    container image list 2>/dev/null | grep -q "$image" && return 0
+    return 1
+  else
+    docker image inspect "$image" &>/dev/null && return 0
+    return 1
+  fi
+}
+
+# ============================================================================
+# Subcommands
+# ============================================================================
+
+cmd_status() {
+  detect_runtime
+  echo "Running occ containers (runtime: $RUNTIME):"
+  echo ""
+  if [[ "$RUNTIME" == "container" ]]; then
+    container list --filter "name=occ-workspace-*" 2>/dev/null || container list 2>/dev/null || echo "(none)"
+  else
+    docker ps --filter "name=occ-workspace-" 2>/dev/null || echo "(none)"
+  fi
+  exit 0
+}
+
+cmd_config() {
+  echo "OCC config directory: $CONFIG_DIR"
+  echo ""
+  if [[ -d "$CONFIG_DIR" ]]; then
+    echo "Contents:"
+    ls -la "$CONFIG_DIR" 2>/dev/null || echo "(empty)"
+  else
+    echo "(directory does not exist yet)"
+  fi
+  exit 0
+}
+
+# ============================================================================
+# Validation
+# ============================================================================
+
+validate_project_path() {
+  local path="$1"
+  
+  if [[ ! -e "$path" ]]; then
+    echo "Error: Project path does not exist: $path" >&2
+    exit 1
+  fi
+  
+  if [[ ! -d "$path" ]]; then
+    echo "Error: Project path is not a directory: $path" >&2
+    exit 1
+  fi
+}
+
+validate_opencode_config() {
+  if [[ ! -d "$OPENCODE_CONFIG_DIR" ]]; then
+    echo "Error: OpenCode config directory not found: $OPENCODE_CONFIG_DIR" >&2
+    echo "Please ensure OpenCode is installed and configured first." >&2
+    exit 1
+  fi
+}
+
+# ============================================================================
+# Main
+# ============================================================================
+
+main() {
+  # Parse arguments
+  local rebuild=false
+  local no_tailscale=false
+  local project_path=""
+  local -a env_vars=()
+  local show_help=false
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --help)
+        show_help=true
+        shift
+        ;;
+      --rebuild)
+        rebuild=true
+        shift
+        ;;
+      --no-tailscale)
+        no_tailscale=true
+        shift
+        ;;
+      --env)
+        if [[ $# -lt 2 ]]; then
+          echo "Error: --env requires a variable name" >&2
+          exit 1
+        fi
+        env_vars+=("$2")
+        shift 2
+        ;;
+      status)
+        cmd_status
+        ;;
+      config)
+        cmd_config
+        ;;
+      -*)
+        echo "Error: Unknown option: $1" >&2
+        usage >&2
+        exit 1
+        ;;
+      *)
+        # Positional argument - project path
+        if [[ -z "$project_path" ]]; then
+          project_path="$1"
+        else
+          echo "Error: Multiple project paths specified" >&2
+          exit 1
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  # Show help if requested (can be combined with other flags for parsing test)
+  if [[ "$show_help" == true ]]; then
+    usage
+    exit 0
+  fi
+
+  # Detect runtime
+  detect_runtime
+
+  # Validate opencode config exists
+  validate_opencode_config
+
+  # Validate project path if provided
+  if [[ -n "$project_path" ]]; then
+    validate_project_path "$project_path"
+    # Convert to absolute path
+    project_path="$(cd "$project_path" && pwd)"
+  fi
+
+  # ---- STUB: Actual build/launch would happen here ----
+  echo "Would launch container with:"
+  echo "  Runtime: $RUNTIME"
+  echo "  Rebuild: $rebuild"
+  echo "  No Tailscale: $no_tailscale"
+  echo "  Project Path: ${project_path:-<none>}"
+  echo "  Extra Env Vars: ${env_vars[*]:-<none>}"
+  exit 0
+}
+
+main "$@"
