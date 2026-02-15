@@ -20,37 +20,14 @@ occ run ~/Code/myproject    # Launch container with your project
 ## Requirements
 
 - **Python 3.12+**
-- **Docker Desktop** or **Docker Engine**
+- **Docker or Colima Engine**
 
 ## Installation
 
 Install using `uv tool`:
 
 ```bash
-uv tool install git+https://github.com/yourorg/occ.git
-```
-
-Or install from local source:
-
-```bash
-git clone https://github.com/yourorg/occ.git
-cd occ
-uv tool install .
-```
-
-Or for development:
-
-```bash
-git clone https://github.com/yourorg/occ.git
-cd occ
-uv pip install -e .
-```
-
-Verify installation:
-
-```bash
-occ --version   # Should print: 1.0.0
-occ --help
+uv tool install git+https://github.com/audibleblink/occ.git
 ```
 
 ## Quick Start
@@ -97,33 +74,6 @@ occ run --keep-alive
 | `--verbose`, `-v` | Verbose output |
 | `--quiet`, `-q` | Minimal output |
 
-### Examples
-
-```bash
-# Start a container for the current directory
-occ run
-
-# Work on a specific project
-occ run ~/Code/my-awesome-project
-
-# Pass multiple environment variables
-occ run -e API_KEY=secret -e DEBUG=1 ~/Code/project
-
-# Rebuild after modifying the Dockerfile
-occ run --rebuild
-
-# Check running containers
-occ status
-
-# Attach to a running container
-occ shell myproject
-
-# Stop a specific container
-occ stop myproject
-
-# Stop all containers
-occ stop --all
-```
 
 ## Configuration
 
@@ -135,7 +85,7 @@ Configuration is stored in `~/.config/occ/`:
 └── Dockerfile       # Container image definition
 ```
 
-On first run, default configuration files are automatically created.
+On first run, default configuration files are automatically copied from the package.
 
 ### config.toml
 
@@ -168,7 +118,8 @@ load_dotenv = true
 
 ### Customizing the Dockerfile
 
-Edit `~/.config/occ/Dockerfile` to customize the container image:
+After the initial run,
+edit `~/.config/occ/Dockerfile` to customize the container image:
 
 ```bash
 occ config edit    # Opens config.toml (edit Dockerfile directly)
@@ -197,36 +148,6 @@ Environment variables are collected in this order (later overrides earlier):
 
 Container names are derived from project paths (e.g., `occ-myproject`).
 
-## Troubleshooting
-
-### Docker not running
-
-```
-Error: Docker is not running. Please start Docker and try again.
-```
-
-Start Docker Desktop or the Docker daemon.
-
-### Project path does not exist
-
-```
-Error: Project path does not exist: /path/to/project
-```
-
-Verify the path exists and is spelled correctly.
-
-### Container already running
-
-When running `occ run` for a project that has a running container, you'll be prompted:
-
-```
-Container is running. [A]ttach / [R]estart / [C]ancel?
-```
-
-- **A** - Attach to the existing container
-- **R** - Stop and recreate the container
-- **C** - Cancel
-
 ### Reset to defaults
 
 If configuration gets corrupted:
@@ -234,7 +155,3 @@ If configuration gets corrupted:
 ```bash
 occ config reset
 ```
-
-## License
-
-MIT

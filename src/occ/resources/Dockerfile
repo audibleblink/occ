@@ -1,23 +1,42 @@
 # occ Development Container
-# Base image for OpenCode Container CLI
+# Multi-arch Dockerfile for ephemeral dev containers
+# Base: Wolfi (glibc-based minimal Linux)
 
-FROM python:3.12-slim
+FROM cgr.dev/chainguard/wolfi-base:latest
 
-# Install basic development tools
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
+# Build args for multi-arch support (automatically set by docker buildx)
+ARG TARGETARCH
+
+# Install system packages via apk
+RUN apk update && apk add --no-cache \
+    bash \
+    coreutils \
+    shadow \
+    ca-certificates \
     curl \
     wget \
+    git \
     vim \
     neovim \
     tmux \
+    jq \
     ripgrep \
     fzf \
-    jq \
-    build-essential \
-    ca-certificates \
-    openssh-client \
-    && rm -rf /var/lib/apt/lists/*
+    build-base \
+    gosu \
+    && rm -rf /var/cache/apk/*
+
+# Install opencode via install script
+RUN curl -fsSL https://opencode.ai/install | bash && \
+    mv /root/.local/bin/opencode /usr/local/bin/opencode 2>/dev/null || \
+    mv /root/.opencode/bin/opencode /usr/local/bin/opencode 2>/dev/null || \
+    true && \
+    chmod +x /usr/local/bin/opencode 2>/dev/null || true
+
+# Install mise via install script
+ENV MISE_INSTALL_PATH=/usr/local/bin/mise
+RUN curl -fsSL https://mise.run | bash && \
+    chmod +x /usr/local/bin/mise
 
 # Set up working directory
 WORKDIR /workspace
