@@ -107,17 +107,17 @@ occ --help  # Should show all options
 
 ### Tasks
 
-- [ ] Remove positional `project: Optional[str]` argument from `shell()`
-- [ ] Add `--path/-p` option (Path type, defaults to None/cwd)
-- [ ] Add `--rebuild` option (bool, defaults to False)
-- [ ] Add `--env/-e` option (list[str], repeatable)
-- [ ] Add `--verbose/-v` option (bool)
-- [ ] Add `--quiet/-q` option (bool)
-- [ ] Update function to call `ensure_container_running()` with new parameters
-- [ ] Update attach call to use `/bin/bash` as command
-- [ ] Add stop-on-exit behavior (respects config, no `keep_alive` option)
-- [ ] Update docstring with new usage examples
-- [ ] Remove `resolve_container_name()` call (no longer needed for shell)
+- [x] Remove positional `project: Optional[str]` argument from `shell()`
+- [x] Add `--path/-p` option (Path type, defaults to None/cwd)
+- [x] Add `--rebuild` option (bool, defaults to False)
+- [x] Add `--env/-e` option (list[str], repeatable)
+- [x] Add `--verbose/-v` option (bool)
+- [x] Add `--quiet/-q` option (bool)
+- [x] Update function to call `ensure_container_running()` with new parameters
+- [x] Update attach call to use `/bin/bash` as command
+- [x] Add stop-on-exit behavior (respects config, no `keep_alive` option)
+- [x] Update docstring with new usage examples
+- [x] Remove `resolve_container_name()` call (no longer needed for shell)
 
 ### Verification
 

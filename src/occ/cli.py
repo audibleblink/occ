@@ -409,43 +409,78 @@ def status() -> None:
 
 @app.command()
 def shell(
-    project: Annotated[
-        Optional[str],
-        typer.Argument(help="Project name or container name (without occ- prefix)"),
+    path: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--path",
+            "-p",
+            help="Project directory path (defaults to current directory).",
+        ),
     ] = None,
+    rebuild: Annotated[
+        bool,
+        typer.Option(
+            "--rebuild",
+            help="Force rebuild of container image.",
+        ),
+    ] = False,
+    env: Annotated[
+        Optional[list[str]],
+        typer.Option(
+            "--env",
+            "-e",
+            help="Pass environment variable (VAR=value), repeatable.",
+        ),
+    ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            "-v",
+            help="Verbose output (show full build logs).",
+        ),
+    ] = False,
+    quiet: Annotated[
+        bool,
+        typer.Option(
+            "--quiet",
+            "-q",
+            help="Minimal output.",
+        ),
+    ] = False,
 ) -> None:
-    """Attach to a running occ container with a bash shell.
+    """Launch a bash shell in an occ container.
 
-    Use this command when you need direct shell access instead of opencode.
+    Creates the container if it doesn't exist. Use this when you need
+    direct shell access instead of opencode.
+
+    Examples:
+        occ shell                  # Bash shell for current directory
+        occ shell -p ~/myproject   # Bash shell for ~/myproject
+        occ shell --rebuild        # Force rebuild, then bash shell
     """
-    ensure_config_initialized()
-    require_docker()
-    container_name = resolve_container_name(project)
-    container_status = get_container_status(container_name)
+    # Use helper to ensure container is running
+    container_name = ensure_container_running(
+        path=path,
+        rebuild=rebuild,
+        env=env,
+        verbose=verbose,
+        quiet=quiet,
+    )
 
-    if container_status == "not-found":
-        print(f"Error: Container '{container_name}' not found.", file=sys.stderr)
-        print()
-        print("Running containers:")
-        containers = list_occ_containers()
-        if containers:
-            for c in containers:
-                if c.get("status") == "running":
-                    print(f"  - {c.get('name')}")
-        else:
-            print("  (none)")
-        raise typer.Exit(1)
-
-    if container_status != "running":
-        print(
-            f"Error: Container '{container_name}' is not running (status: {container_status}).",
-            file=sys.stderr,
-        )
-        print(f"Start it with: occ {project or ''}")
-        raise typer.Exit(1)
-
-    print(f"Attaching to {container_name} (bash)...")
+    # Attach with bash
+    if not quiet:
+        print(f"Attaching to {container_name} (bash)...")
     attach_to_container(container_name, command="/bin/bash")
+
+    # Handle stop on exit (respects config)
+    config = load_config()
+    stop_on_exit = config.get("container", {}).get("stop_on_exit", True)
+    if stop_on_exit:
+        if not quiet:
+            print(f"Stopping container {container_name}...")
+        stop_container(container_name)
+        remove_container(container_name)
 
 
 @app.command()
