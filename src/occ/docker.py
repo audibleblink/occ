@@ -148,14 +148,16 @@ def check_docker_available() -> bool:
 
 
 def build_image(
-    dockerfile_path: Path, tag: str = "occ:latest", verbose: bool = False
+    dockerfile_path: Path,
+    tag: str = "occ:latest",
+    verbose: bool = False,  # noqa: ARG001
 ) -> None:
-    """Build image from Dockerfile, show progress.
+    """Build image from Dockerfile, streaming output in real-time.
 
     Args:
         dockerfile_path: Path to the Dockerfile.
         tag: Image tag (default: occ:latest).
-        verbose: If True, show full build output. If False, show single updating line.
+        verbose: Unused, kept for API compatibility.
 
     Raises:
         SystemExit: If build fails.
@@ -166,6 +168,7 @@ def build_image(
     try:
         # Build using low-level API for streaming output
         print(f"Building image {tag}...")
+        sys.stdout.flush()
 
         # Use build with decode=True for streaming
         build_logs = client.api.build(
@@ -176,19 +179,13 @@ def build_image(
             decode=True,
         )
 
-        last_step = ""
         for log in build_logs:
             if "stream" in log:
-                line = log["stream"].strip()
-                if line:
-                    if verbose:
-                        print(line)
-                    else:
-                        # Extract step info for single-line progress
-                        if line.startswith("Step ") or line.startswith("---> "):
-                            last_step = line[:60]
-                            # Print with carriage return for updating line
-                            print(f"\r{last_step:<70}", end="", flush=True)
+                # Print all stream output - preserves original newlines
+                stream_content = log["stream"]
+                if stream_content:
+                    # Print without adding extra newline since stream includes it
+                    print(stream_content, end="", flush=True)
             elif "error" in log:
                 print(f"\nBuild error: {log['error']}", file=sys.stderr)
                 sys.exit(1)
@@ -197,11 +194,7 @@ def build_image(
                 print(f"\nBuild error: {detail}", file=sys.stderr)
                 sys.exit(1)
 
-        # Clear the line and print success
-        if not verbose:
-            print(f"\r{'Build complete!':<70}")
-        else:
-            print("Build complete!")
+        print("Build complete!")
 
     except APIError as e:
         print(f"\nDocker API error during build: {e}", file=sys.stderr)
