@@ -62,11 +62,11 @@ python -c "from occ.cli import ensure_container_running; print('Helper function 
 
 ### Tasks
 
-- [ ] Modify `run_container_logic()` to call `ensure_container_running()` for container setup
-- [ ] Keep only attachment logic (`attach_to_container(container_name)`) in `run_container_logic()`
-- [ ] Keep stop-on-exit behavior handling in `run_container_logic()` (respects `keep_alive` flag)
-- [ ] Reload config after helper returns for stop-on-exit check
-- [ ] Ensure all existing main command behavior is preserved
+- [x] Modify `run_container_logic()` to call `ensure_container_running()` for container setup
+- [x] Keep only attachment logic (`attach_to_container(container_name)`) in `run_container_logic()`
+- [x] Keep stop-on-exit behavior handling in `run_container_logic()` (respects `keep_alive` flag)
+- [x] Reload config after helper returns for stop-on-exit check
+- [x] Ensure all existing main command behavior is preserved
 
 ### Verification
 

@@ -253,122 +253,25 @@ def run_container_logic(
 ) -> None:
     """Launch a container for the given project.
 
-    This is the core logic for the main command.
+    This is the core logic for the main command. Uses ensure_container_running()
+    to handle container lifecycle, then attaches with opencode.
     """
-    # Resolve project path (default to current directory)
-    if project_path is None:
-        project_path = Path.cwd()
-    else:
-        project_path = Path(project_path).resolve()
+    # Use helper to ensure container is running
+    container_name = ensure_container_running(
+        path=project_path,
+        rebuild=rebuild,
+        env=env,
+        verbose=verbose,
+        quiet=quiet,
+    )
 
-    # Validate project path exists
-    if not project_path.exists():
-        print(f"Error: Project path does not exist: {project_path}", file=sys.stderr)
-        raise typer.Exit(1)
-
-    if not project_path.is_dir():
-        print(
-            f"Error: Project path is not a directory: {project_path}", file=sys.stderr
-        )
-        raise typer.Exit(1)
-
-    # Ensure config is initialized
-    ensure_config_initialized()
-
-    # Load config
-    try:
-        config = load_config()
-    except ValueError as e:
-        print(f"Error: Invalid configuration: {e}", file=sys.stderr)
-        raise typer.Exit(1)
-
-    # Check Docker availability
-    if not check_docker_available():
-        print(
-            "Error: Docker is not running. Please start Docker and try again.",
-            file=sys.stderr,
-        )
-        raise typer.Exit(1)
-
-    # Determine container name
-    container_name = sanitize_container_name(str(project_path))
-
-    # Check if rebuild is needed
-    should_rebuild = rebuild or needs_rebuild() or not image_exists()
-
-    if should_rebuild:
-        if not quiet:
-            if rebuild:
-                print("Rebuilding image (--rebuild flag)...")
-            elif not image_exists():
-                print("Building image (first run)...")
-            else:
-                print("Dockerfile changed, rebuilding image...")
-
-        build_image(get_dockerfile_path(), verbose=verbose)
-        save_dockerfile_hash()
-        cleanup_dangling_images()
-
-    # Check container status
-    container_status = get_container_status(container_name)
-
-    if container_status == "running":
-        # Container is already running - prompt user
-        action = prompt_running_container()
-
-        if action == "cancel":
-            if not quiet:
-                print("Cancelled.")
-            raise typer.Exit(0)
-        elif action == "attach":
-            if not quiet:
-                print(f"Attaching to {container_name}...")
-            attach_to_container(container_name)
-            return
-        elif action == "restart":
-            if not quiet:
-                print(f"Restarting {container_name}...")
-            stop_container(container_name)
-            remove_container(container_name)
-            container_status = "not-found"
-
-    elif container_status in ("exited", "created"):
-        # Container exists but not running - remove and recreate
-        if not quiet:
-            print(f"Removing stopped container {container_name}...")
-        remove_container(container_name)
-        container_status = "not-found"
-
-    # Create new container if needed
-    if container_status == "not-found":
-        # Collect environment variables
-        env_vars = collect_env_vars(project_path, env, config)
-
-        # Assemble mounts
-        extra_mounts = get_extra_mounts(config)
-        mounts = assemble_mounts(project_path, extra_mounts)
-
-        # Get shell from config
-        shell = config.get("container", {}).get("shell", "/bin/bash")
-
-        # Create and start container
-        if not quiet:
-            print(f"Creating container {container_name}...")
-        create_container(
-            name=container_name,
-            image="occ:latest",
-            mounts=mounts,
-            env_vars=env_vars,
-            shell=shell,
-        )
-        start_container(container_name)
-
-    # Attach to container
+    # Attach to container with opencode (default command)
     if not quiet:
         print(f"Attaching to {container_name}...")
     attach_to_container(container_name)
 
     # Handle stop on exit behavior
+    config = load_config()
     stop_on_exit = config.get("container", {}).get("stop_on_exit", True)
     if stop_on_exit and not keep_alive:
         if not quiet:
