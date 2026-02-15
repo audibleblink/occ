@@ -105,6 +105,144 @@ def prompt_running_container() -> str:
         print("Please enter A, R, or C")
 
 
+def ensure_container_running(
+    path: Path | None = None,
+    rebuild: bool = False,
+    env: list[str] | None = None,
+    verbose: bool = False,
+    quiet: bool = False,
+) -> str:
+    """Ensure a container is running for the given project path.
+
+    Handles the full container lifecycle:
+    - Config loading and validation
+    - Docker availability check
+    - Image build (if needed or --rebuild)
+    - Container status prompts (running/stopped)
+    - Container creation and startup
+
+    Args:
+        path: Project directory path (defaults to cwd).
+        rebuild: Force rebuild of container image.
+        env: Additional environment variables (VAR=value format).
+        verbose: Show full build logs.
+        quiet: Minimal output.
+
+    Returns:
+        Container name (str) ready for attachment.
+
+    Raises:
+        typer.Exit: On errors (missing path, Docker unavailable, etc.)
+    """
+    # Resolve project path (default to current directory)
+    if path is None:
+        project_path = Path.cwd()
+    else:
+        project_path = Path(path).resolve()
+
+    # Validate project path exists
+    if not project_path.exists():
+        print(f"Error: Project path does not exist: {project_path}", file=sys.stderr)
+        raise typer.Exit(1)
+
+    if not project_path.is_dir():
+        print(
+            f"Error: Project path is not a directory: {project_path}", file=sys.stderr
+        )
+        raise typer.Exit(1)
+
+    # Ensure config is initialized
+    ensure_config_initialized()
+
+    # Load config
+    try:
+        config = load_config()
+    except ValueError as e:
+        print(f"Error: Invalid configuration: {e}", file=sys.stderr)
+        raise typer.Exit(1)
+
+    # Check Docker availability
+    if not check_docker_available():
+        print(
+            "Error: Docker is not running. Please start Docker and try again.",
+            file=sys.stderr,
+        )
+        raise typer.Exit(1)
+
+    # Determine container name
+    container_name = sanitize_container_name(str(project_path))
+
+    # Check if rebuild is needed
+    should_rebuild = rebuild or needs_rebuild() or not image_exists()
+
+    if should_rebuild:
+        if not quiet:
+            if rebuild:
+                print("Rebuilding image (--rebuild flag)...")
+            elif not image_exists():
+                print("Building image (first run)...")
+            else:
+                print("Dockerfile changed, rebuilding image...")
+
+        build_image(get_dockerfile_path(), verbose=verbose)
+        save_dockerfile_hash()
+        cleanup_dangling_images()
+
+    # Check container status
+    container_status = get_container_status(container_name)
+
+    if container_status == "running":
+        # Container is already running - prompt user
+        action = prompt_running_container()
+
+        if action == "cancel":
+            if not quiet:
+                print("Cancelled.")
+            raise typer.Exit(0)
+        elif action == "attach":
+            # Return container name for caller to attach
+            return container_name
+        elif action == "restart":
+            if not quiet:
+                print(f"Restarting {container_name}...")
+            stop_container(container_name)
+            remove_container(container_name)
+            container_status = "not-found"
+
+    elif container_status in ("exited", "created"):
+        # Container exists but not running - remove and recreate
+        if not quiet:
+            print(f"Removing stopped container {container_name}...")
+        remove_container(container_name)
+        container_status = "not-found"
+
+    # Create new container if needed
+    if container_status == "not-found":
+        # Collect environment variables
+        env_vars = collect_env_vars(project_path, env, config)
+
+        # Assemble mounts
+        extra_mounts = get_extra_mounts(config)
+        mounts = assemble_mounts(project_path, extra_mounts)
+
+        # Get shell from config
+        shell = config.get("container", {}).get("shell", "/bin/bash")
+
+        # Create and start container
+        if not quiet:
+            print(f"Creating container {container_name}...")
+        create_container(
+            name=container_name,
+            image="occ:latest",
+            mounts=mounts,
+            env_vars=env_vars,
+            shell=shell,
+        )
+        start_container(container_name)
+
+    return container_name
+
+
 def run_container_logic(
     project_path: Path | None = None,
     rebuild: bool = False,
@@ -262,7 +400,9 @@ def main(
     ctx: typer.Context,
     path: Annotated[
         Optional[Path],
-        typer.Argument(
+        typer.Option(
+            "--path",
+            "-p",
             help="Project directory path (defaults to current directory).",
         ),
     ] = None,
@@ -322,7 +462,7 @@ def main(
 
     Examples:
         occ                  # Launch container and start opencode
-        occ ~/myproject      # Launch container for ~/myproject
+        occ -p ~/myproject   # Launch opencode in ~/myproject
         occ --rebuild        # Force rebuild and launch
         occ shell            # Attach to container with bash shell
         occ status           # List running containers

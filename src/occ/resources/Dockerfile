@@ -10,20 +10,21 @@ ARG TARGETARCH
 # Install system packages via apk
 RUN apk update && apk add --no-cache \
     bash \
-    coreutils \
-    shadow \
-    ca-certificates \
-    curl \
-    wget \
-    git \
-    vim \
-    neovim \
-    tmux \
-    jq \
-    ripgrep \
-    fzf \
     build-base \
+    ca-certificates \
+    coreutils \
+    curl \
+    fzf \
+    git \
     gosu \
+    jq \
+    neovim \
+    ripgrep \
+    shadow \
+    tailscale \
+    tmux \
+    vim \
+    wget \
     && rm -rf /var/cache/apk/*
 
 # Install opencode via install script
