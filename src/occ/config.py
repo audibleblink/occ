@@ -210,11 +210,19 @@ def get_extra_mounts(config: dict[str, Any] | None = None) -> list[dict[str, str
 
     for mount in extra:
         if isinstance(mount, str):
-            # Simple path string - treat as read-only mount to same location
-            expanded_path = str(expand_path(mount))
-            expanded.append(
-                {"source": expanded_path, "target": expanded_path, "mode": "ro"}
-            )
+            # Parse Docker-style mount string: "source:target[:mode]"
+            parts = mount.split(":")
+            if len(parts) >= 2:
+                source = str(expand_path(parts[0]))
+                target = parts[1]
+                mode = parts[2] if len(parts) > 2 else "rw"
+                expanded.append({"source": source, "target": target, "mode": mode})
+            else:
+                # Simple path string - treat as read-only mount to same location
+                expanded_path = str(expand_path(mount))
+                expanded.append(
+                    {"source": expanded_path, "target": expanded_path, "mode": "ro"}
+                )
         elif isinstance(mount, dict):
             # Full mount specification
             mount_copy = mount.copy()

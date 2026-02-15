@@ -1,0 +1,16 @@
+[tools]
+python = "3.12"
+
+[tasks.clean]
+description = "Clean build artifacts and caches"
+run = """
+rm -rf dist/ build/ *.egg-info src/*.egg-info
+rm -rf ~/.config/occ/
+uv tool uninstall occ
+uv cache clean
+docker rmi occ:latest
+"""
+
+[tasks.install]
+description = "Install occ as a uv tool"
+run = "uv tool install . --force"

@@ -3,14 +3,16 @@ stop_on_exit = true
 shell = "/bin/bash"
 
 [mounts]
-extra = []
+extra = [
+    "~/.config/mise:/home/developer/.config/mise",
+    "~/.config/opencode:/home/developer/.config/opencode",
+    "~/.local/share/opencode:/home/developer/.local/share/opencode",
+    "~/.local/state/opencode:/home/developer/.local/state/opencode",
+]
 
 [env]
 allowlist = [
     "ANTHROPIC_API_KEY",
-    "OPENAI_API_KEY",
-    "OPENROUTER_API_KEY",
-    "GEMINI_API_KEY",
-    "MISTRAL_API_KEY",
+    "ANTHROPIC_BASE_URL",
 ]
 load_dotenv = true
