@@ -301,13 +301,14 @@ def start_container(name: str) -> None:
         sys.exit(1)
 
 
-def attach_to_container(name: str) -> None:
-    """Attach interactive shell using docker exec.
+def attach_to_container(name: str, command: str = "opencode") -> None:
+    """Attach to container and run a command interactively.
 
     Uses subprocess to run docker exec -it for proper TTY handling.
 
     Args:
         name: Container name.
+        command: Command to run in the container (default: opencode).
 
     Raises:
         SystemExit: If attach fails.
@@ -315,7 +316,7 @@ def attach_to_container(name: str) -> None:
     try:
         # Use subprocess for interactive TTY
         result = subprocess.run(
-            ["docker", "exec", "-it", name, "/bin/bash"],
+            ["docker", "exec", "-it", name, command],
             check=False,
         )
         # Exit code from the container shell

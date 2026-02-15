@@ -255,54 +255,6 @@ config_app = typer.Typer(
 app.add_typer(config_app, name="config")
 
 
-@app.command(name="run", hidden=False)
-def run_cmd(
-    project_path: Annotated[
-        Optional[Path],
-        typer.Argument(
-            help="Path to project directory (default: current directory)",
-        ),
-    ] = None,
-    rebuild: Annotated[
-        bool,
-        typer.Option("--rebuild", help="Force rebuild of container image"),
-    ] = False,
-    env: Annotated[
-        Optional[list[str]],
-        typer.Option("--env", "-e", help="Extra env var (VAR=value), repeatable"),
-    ] = None,
-    keep_alive: Annotated[
-        bool,
-        typer.Option("--keep-alive", help="Keep container running after shell exit"),
-    ] = False,
-    verbose: Annotated[
-        bool,
-        typer.Option("-v", "--verbose", help="Verbose output"),
-    ] = False,
-    quiet: Annotated[
-        bool,
-        typer.Option("-q", "--quiet", help="Minimal output"),
-    ] = False,
-) -> None:
-    """Launch a container for a project directory.
-
-    This is the default command when running `occ` without subcommands.
-
-    Examples:
-        occ run              # Launch container for current directory
-        occ run ~/myproject  # Launch container for ~/myproject
-        occ run --rebuild    # Force rebuild and launch
-    """
-    run_container_logic(
-        project_path=project_path,
-        rebuild=rebuild,
-        env=env,
-        keep_alive=keep_alive,
-        verbose=verbose,
-        quiet=quiet,
-    )
-
-
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
@@ -317,21 +269,21 @@ def main(
         ),
     ] = None,
 ) -> None:
-    """OpenCode Container CLI - launch containers for development.
+    """OpenCode Container CLI - launch containers and start opencode.
 
-    Run 'occ run' to start a container for the current directory,
-    or 'occ run PATH' to start a container for a specific directory.
+    Running 'occ' launches a container for the current directory and
+    starts opencode automatically. Use 'occ shell' for bash access.
 
     Examples:
-        occ run              # Launch container for current directory
-        occ run ~/myproject  # Launch container for ~/myproject
-        occ run --rebuild    # Force rebuild and launch
+        occ                  # Launch container and start opencode
+        occ ~/myproject      # Launch container for ~/myproject
+        occ --rebuild        # Force rebuild and launch
+        occ shell            # Attach to container with bash shell
         occ status           # List running containers
         occ stop             # Stop container for current directory
     """
-    # If no subcommand was invoked, run the default 'run' command
+    # If no subcommand was invoked, launch container and start opencode
     if ctx.invoked_subcommand is None:
-        # Invoke 'run' with default arguments
         run_container_logic()
 
 
@@ -366,7 +318,10 @@ def shell(
         typer.Argument(help="Project name or container name (without occ- prefix)"),
     ] = None,
 ) -> None:
-    """Attach to a running occ container."""
+    """Attach to a running occ container with a bash shell.
+
+    Use this command when you need direct shell access instead of opencode.
+    """
     ensure_config_initialized()
     require_docker()
     container_name = resolve_container_name(project)
@@ -390,11 +345,11 @@ def shell(
             f"Error: Container '{container_name}' is not running (status: {container_status}).",
             file=sys.stderr,
         )
-        print(f"Start it with: occ shell {project or ''}")
+        print(f"Start it with: occ {project or ''}")
         raise typer.Exit(1)
 
-    print(f"Attaching to {container_name}...")
-    attach_to_container(container_name)
+    print(f"Attaching to {container_name} (bash)...")
+    attach_to_container(container_name, command="/bin/bash")
 
 
 @app.command()
