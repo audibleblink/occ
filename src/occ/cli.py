@@ -27,6 +27,7 @@ from occ.docker import (
     attach_to_container,
     build_image,
     check_docker_available,
+    cleanup_dangling_images,
     create_container,
     get_container_status,
     image_exists,
@@ -168,6 +169,7 @@ def run_container_logic(
 
         build_image(get_dockerfile_path(), verbose=verbose)
         save_dockerfile_hash()
+        cleanup_dangling_images()
 
     # Check container status
     container_status = get_container_status(container_name)
@@ -258,6 +260,50 @@ app.add_typer(config_app, name="config")
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
+    path: Annotated[
+        Optional[Path],
+        typer.Argument(
+            help="Project directory path (defaults to current directory).",
+        ),
+    ] = None,
+    rebuild: Annotated[
+        bool,
+        typer.Option(
+            "--rebuild",
+            help="Force rebuild of container image.",
+        ),
+    ] = False,
+    env: Annotated[
+        Optional[list[str]],
+        typer.Option(
+            "--env",
+            "-e",
+            help="Pass environment variable (VAR=value), repeatable.",
+        ),
+    ] = None,
+    keep_alive: Annotated[
+        bool,
+        typer.Option(
+            "--keep-alive",
+            help="Keep container running after shell exit.",
+        ),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            "-v",
+            help="Verbose output (show full build logs).",
+        ),
+    ] = False,
+    quiet: Annotated[
+        bool,
+        typer.Option(
+            "--quiet",
+            "-q",
+            help="Minimal output.",
+        ),
+    ] = False,
     version: Annotated[
         Optional[bool],
         typer.Option(
@@ -284,7 +330,14 @@ def main(
     """
     # If no subcommand was invoked, launch container and start opencode
     if ctx.invoked_subcommand is None:
-        run_container_logic()
+        run_container_logic(
+            project_path=path,
+            rebuild=rebuild,
+            env=env,
+            keep_alive=keep_alive,
+            verbose=verbose,
+            quiet=quiet,
+        )
 
 
 @app.command()
@@ -390,8 +443,8 @@ def stop(
     container_status = get_container_status(container_name)
 
     if container_status == "not-found":
-        print(f"Container '{container_name}' not found.")
-        return
+        print(f"Error: Container '{container_name}' not found.", file=sys.stderr)
+        raise typer.Exit(1)
 
     print(f"Stopping {container_name}...")
     stop_container(container_name)
@@ -412,10 +465,12 @@ def config_main(ctx: typer.Context) -> None:
     if ctx.invoked_subcommand is None:
         print(f"Configuration directory: {CONFIG_DIR}")
         print(f"Config file: {get_config_path()}")
+        print(f"Dockerfile: {get_dockerfile_path()}")
         print()
         print("Commands:")
-        print("  occ config edit   - Edit config.toml in your editor")
-        print("  occ config reset  - Reset configuration to defaults")
+        print("  occ config edit       - Edit config.toml in your editor")
+        print("  occ config dockerfile - Edit Dockerfile in your editor")
+        print("  occ config reset      - Reset configuration to defaults")
 
 
 @config_app.command("reset")
@@ -440,12 +495,15 @@ def config_reset(
     print(f"Configuration reset to defaults at {CONFIG_DIR}/")
 
 
-@config_app.command("edit")
-def config_edit() -> None:
-    """Open config.toml in your editor."""
-    ensure_config_initialized()
-    config_path = get_config_path()
+def _open_in_editor(file_path: Path) -> None:
+    """Open a file in the user's editor.
 
+    Args:
+        file_path: Path to the file to edit.
+
+    Raises:
+        typer.Exit: If no editor is found or editor fails to open.
+    """
     # Get editor from environment
     editor = os.environ.get("EDITOR") or os.environ.get("VISUAL")
 
@@ -474,16 +532,30 @@ def config_edit() -> None:
         print("  export EDITOR=vim")
         print("  export EDITOR=code")
         print()
-        print(f"Or edit the file directly at: {config_path}")
+        print(f"Or edit the file directly at: {file_path}")
         raise typer.Exit(1)
 
     # Open editor
     try:
-        subprocess.run([editor, str(config_path)])
+        subprocess.run([editor, str(file_path)])
     except Exception as e:
         print(f"Error opening editor: {e}", file=sys.stderr)
-        print(f"Edit the file directly at: {config_path}")
+        print(f"Edit the file directly at: {file_path}")
         raise typer.Exit(1)
+
+
+@config_app.command("edit")
+def config_edit() -> None:
+    """Open config.toml in your editor."""
+    ensure_config_initialized()
+    _open_in_editor(get_config_path())
+
+
+@config_app.command("dockerfile")
+def config_dockerfile() -> None:
+    """Open Dockerfile in your editor."""
+    ensure_config_initialized()
+    _open_in_editor(get_dockerfile_path())
 
 
 if __name__ == "__main__":

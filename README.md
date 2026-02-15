@@ -14,7 +14,7 @@ Ephemeral development containers pre-loaded with OpenCode and developer tools.
 One command spins up a fully-equipped workspace. Containers are automatically cleaned up when you exit.
 
 ```bash
-occ run ~/Code/myproject    # Launch container with your project
+occ ~/Code/myproject    # Launch container with your project
 ```
 
 ## Requirements
@@ -33,20 +33,15 @@ uv tool install git+https://github.com/audibleblink/occ.git
 ## Quick Start
 
 ```bash
-# Launch container for current directory
-occ run
+# Launch an opencode container for current directory
+occ 
 
 # Launch container for a specific project
-occ run ~/Code/myproject
-
-# Force rebuild if Dockerfile changed
-occ run --rebuild
+occ ~/Code/myproject
 
 # Pass extra environment variables
-occ run --env MY_API_KEY=secret ~/Code/myproject
+occ --env MY_API_KEY=secret ~/Code/myproject
 
-# Keep container running after exit (for reattaching later)
-occ run --keep-alive
 ```
 
 ## Command Reference
@@ -55,24 +50,26 @@ occ run --keep-alive
 
 | Command | Description |
 |---------|-------------|
-| `occ run [PATH]` | Launch container for a project directory |
+| `occ [PATH]` | Launch container for a project directory |
 | `occ status` | List running occ containers |
 | `occ shell [PROJECT]` | Attach to a running container |
 | `occ stop [PROJECT]` | Stop a container |
 | `occ stop --all` | Stop all occ containers |
 | `occ config` | Show configuration directory |
 | `occ config edit` | Edit config.toml in your editor |
+| `occ config dockerfile` | Edit Dockerfile in your editor |
 | `occ config reset` | Reset configuration to defaults |
 
-### Options for `occ run`
+### Options for `occ [PATH]`
 
 | Option | Description |
 |--------|-------------|
 | `--rebuild` | Force rebuild of container image |
 | `--env`, `-e` | Pass env var (VAR=value), repeatable |
 | `--keep-alive` | Keep container running after shell exit |
-| `--verbose`, `-v` | Verbose output |
+| `--verbose`, `-v` | Verbose output (show full build logs) |
 | `--quiet`, `-q` | Minimal output |
+| `--version`, `-V` | Show version and exit |
 
 
 ## Configuration
@@ -122,21 +119,18 @@ After the initial run,
 edit `~/.config/occ/Dockerfile` to customize the container image:
 
 ```bash
-occ config edit    # Opens config.toml (edit Dockerfile directly)
-# or
-$EDITOR ~/.config/occ/Dockerfile
+occ config dockerfile    # Opens Dockerfile in your editor
 ```
 
-After making changes, the next `occ run` will automatically detect the change and rebuild.
+After making changes, the next `occ` will automatically detect the change and rebuild.
 
 ### Environment Variable Priority
 
-Environment variables are collected in this order (later overrides earlier):
+Environment variables are collected in this order (higher priority overrides lower):
 
-1. Host allowlist (from config.toml)
-2. CLI `--env` flags
-3. Project `.env` file
-4. Implicit vars (`HOST_UID`, `HOST_GID`)
+1. **Lowest**: Host env vars matching allowlist (from config.toml)
+2. **Middle**: Project `.env` file (if `load_dotenv = true`)
+3. **Highest**: CLI `--env` flags
 
 ## How It Works
 
