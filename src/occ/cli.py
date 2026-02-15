@@ -367,7 +367,8 @@ def main(
         occ                  # Launch container and start opencode
         occ -p ~/myproject   # Launch opencode in ~/myproject
         occ --rebuild        # Force rebuild and launch
-        occ shell            # Attach to container with bash shell
+        occ shell            # Bash shell for current directory
+        occ shell -p ~/proj  # Bash shell for ~/proj
         occ status           # List running containers
         occ stop             # Stop container for current directory
     """

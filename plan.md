@@ -161,12 +161,12 @@ python -m occ.cli shell --help | grep -E "--rebuild"
 
 ### Tasks
 
-- [ ] Update main command docstring examples to include new shell usage
-- [ ] Ensure shell command docstring has clear examples:
+- [x] Update main command docstring examples to include new shell usage
+- [x] Ensure shell command docstring has clear examples:
   - `occ shell` (bash for cwd)
   - `occ shell -p ~/myproject` (bash for path)
   - `occ shell --rebuild` (force rebuild)
-- [ ] Verify all help text is consistent
+- [x] Verify all help text is consistent
 
 ### Verification
 
