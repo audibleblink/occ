@@ -198,11 +198,11 @@ python -m occ.cli shell --help | grep "occ shell -p"
 
 ### Tasks
 
-- [ ] Review `resolve_container_name()` - determine if still needed by other commands
-- [ ] If `resolve_container_name()` is only used by old shell command, consider removal or update
-- [ ] Run full syntax validation
-- [ ] Run type checking if available (mypy)
-- [ ] Perform manual end-to-end testing of all commands
+- [x] Review `resolve_container_name()` - determine if still needed by other commands
+- [x] If `resolve_container_name()` is only used by old shell command, consider removal or update
+- [x] Run full syntax validation
+- [x] Run type checking if available (mypy)
+- [x] Perform manual end-to-end testing of all commands
 
 ### Verification
 
