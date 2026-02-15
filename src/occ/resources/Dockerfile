@@ -38,7 +38,7 @@ USER developer
 # Ensure ~/.local/bin and ~/.opencode/bin are in PATH for developer
 ENV PATH="/home/developer/.local/bin:/home/developer/.opencode/bin:${PATH}"
 
-# Create config directories so mounts don't create them as root
+# HACK: Create config directories so mounts don't create them as root
 RUN mkdir -p ~/.config/mise ~/.config/opencode ~/.local/share/opencode ~/.local/state/opencode
 
 # Install opencode via install script (installs to ~/.local/bin or ~/.opencode/bin)
