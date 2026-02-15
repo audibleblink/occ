@@ -23,33 +23,32 @@ RUN apk update && apk add --no-cache \
     shadow \
     tailscale \
     tmux \
-    vim \
     wget \
     && rm -rf /var/cache/apk/*
 
-# Install opencode via install script
-RUN curl -fsSL https://opencode.ai/install | bash && \
-    mv /root/.local/bin/opencode /usr/local/bin/opencode 2>/dev/null || \
-    mv /root/.opencode/bin/opencode /usr/local/bin/opencode 2>/dev/null || \
-    true && \
-    chmod +x /usr/local/bin/opencode 2>/dev/null || true
-
-# Install mise via install script
-ENV MISE_INSTALL_PATH=/usr/local/bin/mise
-RUN curl -fsSL https://mise.run | bash && \
-    chmod +x /usr/local/bin/mise
-
-# Set up working directory
-WORKDIR /workspace
-
-# Create non-root user
+# Create non-root user early
 ARG HOST_UID=1000
 ARG HOST_GID=1000
 RUN groupadd -g ${HOST_GID} developer || true && \
     useradd -m -u ${HOST_UID} -g ${HOST_GID} -s /bin/bash developer || true
 
-# Set default user
+# Switch to developer for installations
 USER developer
+
+# Ensure ~/.local/bin and ~/.opencode/bin are in PATH for developer
+ENV PATH="/home/developer/.local/bin:/home/developer/.opencode/bin:${PATH}"
+
+# Create config directories so mounts don't create them as root
+RUN mkdir -p ~/.config/mise ~/.config/opencode ~/.local/share/opencode ~/.local/state/opencode
+
+# Install opencode via install script (installs to ~/.local/bin or ~/.opencode/bin)
+RUN curl -fsSL https://opencode.ai/install | bash
+
+# Install mise via install script (installs to ~/.local/bin by default)
+RUN curl -fsSL https://mise.run | bash
+
+# Set up working directory
+WORKDIR /workspace
 
 # Default command
 CMD ["/bin/bash"]

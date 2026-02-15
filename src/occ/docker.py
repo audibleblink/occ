@@ -20,7 +20,6 @@ from docker.errors import APIError, DockerException, ImageNotFound, NotFound
 
 if TYPE_CHECKING:
     from docker import DockerClient
-    from docker.models.containers import Container
 
 
 # Error messages
@@ -507,10 +506,9 @@ def get_default_mounts(project_path: Path) -> list[dict]:
 
     This includes:
     - Project directory -> /workspace (rw)
-    - OpenCode config directories (ro):
-      - ~/.config/opencode -> /root/.config/opencode
-      - ~/.local/share/opencode -> /root/.local/share/opencode
-      - ~/.local/state/opencode -> /root/.local/state/opencode
+
+    Additional mounts (opencode config, mise, etc.) are configured in config.toml
+    under [mounts] extra.
 
     Args:
         project_path: Path to the project directory.
@@ -518,36 +516,13 @@ def get_default_mounts(project_path: Path) -> list[dict]:
     Returns:
         List of mount dicts.
     """
-    mounts = []
-
-    # Project directory mount
-    mounts.append(
+    return [
         {
             "source": str(project_path.resolve()),
             "target": "/workspace",
             "mode": "rw",
         }
-    )
-
-    # OpenCode config mounts (read-only)
-    opencode_paths = [
-        ("~/.config/opencode", "/root/.config/opencode"),
-        ("~/.local/share/opencode", "/root/.local/share/opencode"),
-        ("~/.local/state/opencode", "/root/.local/state/opencode"),
     ]
-
-    for host_path, container_path in opencode_paths:
-        expanded = Path(host_path).expanduser()
-        if expanded.exists():
-            mounts.append(
-                {
-                    "source": str(expanded),
-                    "target": container_path,
-                    "mode": "ro",
-                }
-            )
-
-    return mounts
 
 
 def assemble_mounts(
