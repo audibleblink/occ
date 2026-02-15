@@ -85,7 +85,7 @@ def _parse_dotenv(dotenv_path: Path) -> dict[str, str]:
 
     try:
         with open(dotenv_path) as f:
-            for _, line in enumerate(f, 1):
+            for line in f:
                 line = line.strip()
 
                 # Skip empty lines and comments

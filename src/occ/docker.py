@@ -58,8 +58,6 @@ def _find_docker_socket() -> str | None:
     Returns:
         Socket URL if found, None otherwise.
     """
-    import os
-
     socket_paths = [
         "/var/run/docker.sock",
         str(Path.home() / ".config" / "colima" / "default" / "docker.sock"),
@@ -74,14 +72,14 @@ def _find_docker_socket() -> str | None:
     return None
 
 
-def get_client() -> DockerClient:
-    """Get Docker client, raise helpful error if Docker not available.
+def _try_connect() -> DockerClient | None:
+    """Attempt to connect to Docker daemon.
+
+    Tries connecting via environment first, then searches for socket files.
+    Sets DOCKER_HOST environment variable on successful socket connection.
 
     Returns:
-        DockerClient instance.
-
-    Raises:
-        SystemExit: If Docker daemon is not running or permission denied.
+        DockerClient if connection successful, None otherwise.
     """
     import os
 
@@ -104,6 +102,22 @@ def get_client() -> DockerClient:
             return client
         except DockerException:
             pass
+
+    return None
+
+
+def get_client() -> DockerClient:
+    """Get Docker client, raise helpful error if Docker not available.
+
+    Returns:
+        DockerClient instance.
+
+    Raises:
+        SystemExit: If Docker daemon is not running or permission denied.
+    """
+    client = _try_connect()
+    if client:
+        return client
 
     # If we get here, Docker is not available
     # Try one more time to get a more specific error
@@ -130,29 +144,7 @@ def check_docker_available() -> bool:
     Returns:
         True if Docker is available and running, False otherwise.
     """
-    import os
-
-    # First try from environment
-    try:
-        client = docker.from_env()
-        client.ping()
-        return True
-    except DockerException:
-        pass
-
-    # Try to find socket and connect directly
-    socket_url = _find_docker_socket()
-    if socket_url:
-        try:
-            client = docker.DockerClient(base_url=socket_url)
-            client.ping()
-            # Set DOCKER_HOST for subprocess calls (like docker exec)
-            os.environ["DOCKER_HOST"] = socket_url
-            return True
-        except DockerException:
-            pass
-
-    return False
+    return _try_connect() is not None
 
 
 def build_image(
@@ -464,9 +456,7 @@ def get_container_status(name: str) -> str:
     try:
         container = client.containers.get(name)
         return container.status
-    except NotFound:
-        return "not-found"
-    except APIError:
+    except (NotFound, APIError):
         return "not-found"
 
 

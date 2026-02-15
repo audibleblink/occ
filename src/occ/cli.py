@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 from typing import Annotated, Optional
 
-import click
 import typer
 
 from occ import __version__
@@ -45,6 +44,38 @@ def version_callback(value: bool) -> None:
     if value:
         print(__version__)
         raise typer.Exit()
+
+
+def require_docker() -> None:
+    """Ensure Docker is available, exit with error if not.
+
+    Raises:
+        typer.Exit: If Docker is not running.
+    """
+    if not check_docker_available():
+        print(
+            "Error: Docker is not running. Please start Docker and try again.",
+            file=sys.stderr,
+        )
+        raise typer.Exit(1)
+
+
+def resolve_container_name(project: str | None) -> str:
+    """Resolve a project identifier to a container name.
+
+    Args:
+        project: Project name, container name (with/without occ- prefix), or None.
+
+    Returns:
+        Full container name with occ- prefix.
+    """
+    if project is None:
+        project_path = Path.cwd()
+        return sanitize_container_name(str(project_path))
+
+    if project.startswith("occ-"):
+        return project
+    return f"occ-{project}"
 
 
 def prompt_running_container() -> str:
@@ -308,14 +339,7 @@ def main(
 def status() -> None:
     """List running occ containers."""
     ensure_config_initialized()
-
-    if not check_docker_available():
-        print(
-            "Error: Docker is not running. Please start Docker and try again.",
-            file=sys.stderr,
-        )
-        raise typer.Exit(1)
-
+    require_docker()
     containers = list_occ_containers()
 
     if not containers:
@@ -344,27 +368,8 @@ def shell(
 ) -> None:
     """Attach to a running occ container."""
     ensure_config_initialized()
-
-    if not check_docker_available():
-        print(
-            "Error: Docker is not running. Please start Docker and try again.",
-            file=sys.stderr,
-        )
-        raise typer.Exit(1)
-
-    # Determine container name
-    if project is None:
-        # Use current directory as project
-        project_path = Path.cwd()
-        container_name = sanitize_container_name(str(project_path))
-    else:
-        # Add occ- prefix if not present
-        if project.startswith("occ-"):
-            container_name = project
-        else:
-            container_name = f"occ-{project}"
-
-    # Check if container is running
+    require_docker()
+    container_name = resolve_container_name(project)
     container_status = get_container_status(container_name)
 
     if container_status == "not-found":
@@ -405,13 +410,7 @@ def stop(
 ) -> None:
     """Stop an occ container."""
     ensure_config_initialized()
-
-    if not check_docker_available():
-        print(
-            "Error: Docker is not running. Please start Docker and try again.",
-            file=sys.stderr,
-        )
-        raise typer.Exit(1)
+    require_docker()
 
     if all_containers:
         # Stop all occ containers
@@ -432,18 +431,7 @@ def stop(
         print(f"Stopped {stopped_count} container(s).")
         return
 
-    if project is None:
-        # Use current directory as project
-        project_path = Path.cwd()
-        container_name = sanitize_container_name(str(project_path))
-    else:
-        # Add occ- prefix if not present
-        if project.startswith("occ-"):
-            container_name = project
-        else:
-            container_name = f"occ-{project}"
-
-    # Check if container exists
+    container_name = resolve_container_name(project)
     container_status = get_container_status(container_name)
 
     if container_status == "not-found":
