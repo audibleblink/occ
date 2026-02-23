@@ -45,7 +45,7 @@ RUN mkdir -p ~/.config/mise ~/.config/opencode ~/.local/share/opencode ~/.local/
 RUN curl -fsSL https://opencode.ai/install | bash
 
 # Install mise via install script (installs to ~/.local/bin by default)
-RUN curl -fsSL https://mise.run | bash
+# RUN curl -fsSL https://mise.run | bash
 
 # Set up working directory
 WORKDIR /workspace
