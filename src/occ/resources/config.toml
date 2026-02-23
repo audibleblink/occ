@@ -4,7 +4,7 @@ shell = "/bin/bash"
 
 [mounts]
 extra = [
-    "~/.config/mise:/home/developer/.config/mise",
+    #"~/.config/mise:/home/developer/.config/mise",
     "~/.config/opencode:/home/developer/.config/opencode",
     "~/.local/share/opencode:/home/developer/.local/share/opencode",
     "~/.local/state/opencode:/home/developer/.local/state/opencode",
